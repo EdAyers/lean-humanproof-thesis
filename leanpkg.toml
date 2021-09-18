@@ -1,0 +1,8 @@
+[package]
+name = "lean-humanproof"
+version = "0.1"
+lean_version = "leanprover-community/lean:3.19.0"
+path = "src"
+
+[dependencies]
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "329393a78d910d4e347d2abe0905bd72bda9c2bf"}
