@@ -76,4 +76,23 @@ meta def to_cotelescope : telescope → cotelescope := list.reverse
 
 meta instance : has_coe telescope nat := ⟨list.length⟩
 
+meta def length : telescope → nat := list.length
+
+/-- Finds the index of the deepest binder that satisfies the given predicate.
+Note that the indexing scheme gives the shallowest binder the index zero. -/
+meta def find_index (predicate : binder → Prop) [decidable_pred predicate] : telescope → option ℕ
+| [] := none
+| (h :: t) := if predicate h then some t.length else find_index t
+
+
+meta def reverse_beta : telescope → expr → expr
+| Γ f := Γ.to_lams $ expr.mk_app f $ list.map expr.var $ list.reverse $ list.range Γ.length
+
 end telescope
+
+/-- Given a constant function name `f`, infers the type of `f` and returns `f` as a pi_type telescope. -/
+meta def tactic.fn_type_of_pis : name → tactic (telescope × expr)
+| n := do
+    f ← tactic.mk_const n,
+    y ← tactic.infer_type f,
+    pure $ telescope.of_pis y

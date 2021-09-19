@@ -325,7 +325,7 @@ list.join <$> many (
 meta def inputs_to_sentences : list tact → tactic (list Sentence)
 | cs := do
    xs ← list_parser.run (parse_inputs) cs,
-   (xs, ys) ← return_except xs,
+   (xs, ys) ← tactic.return_except xs,
    pure xs
 
 end writeup

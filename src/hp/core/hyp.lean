@@ -4,7 +4,7 @@ namespace hp
 
 open tactic
 
-/-- Just a helper type for local_constant so I don't have to error handle all the time. -/
+/-- A helper type for local_constant. [todo] rename from hyp -/
 @[derive decidable_eq]
 meta structure hyp :=
 (uniq_name : name)

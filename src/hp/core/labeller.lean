@@ -1,7 +1,28 @@
 import basic hp.core.source
 
-/- System for assigning labels to things that is not as bad as the built in one. -/
+/-! System for assigning labels to things.
+Labels are chosen from hard-coded sets of letters.
+Which set is used depends on the type of the thing being labelled.
+So for example a group element should be labelled with `g`, `h` etc
+but a point in a metric space should be labelled with `x`, `y` etc.
 
+[todo] Allow adding new suggested name lists with attributes.
+[todo] I think that a lot of non-humanproof tactics would benefit (in terms of user-friendliness) from
+using this kind of labelling system. Perhaps there is some way it can be integrated with Lean.
+
+# Labelling pools
+
+A labelling pool is a dictionary `string ⇀ list string` sending a key string to a set of possible labels.
+A labeller is defined by three pools:
+- Class pool: sending names of classes `𝒞` to labels for types `α` that are instances of `𝒞`.
+  For example a type `_ : Type` implementing `group _` should be labelled `G`.
+  If a class has multiple arguments, the first argument is always bound to.
+- Element pool: Suppose we have `α : Type` and `[𝒞 α]` for some typeclass `𝒞`, then the element pool contains labels for the elements of `α`.
+  For example, `{G : Type} [group G]` causes `_ : G` to be labelled `g` or `h`. While `[metric_space X]` will be labelled `x y : X`
+- Type pool: takes the function constant name of a type as the key and returns element names for that type.
+  Eg terms of type `set α` will be labelled `A`, `B` etc.
+
+-/
 namespace hp
 
 meta def labeller.pool := listdict string string
@@ -26,7 +47,7 @@ meta instance {n} {l : labeller} : decidable (n ∈ l) := by apply_instance
 
 meta def default_labels := ["x", "y", "z", "v", "w", "a", "b", "c"]
 
-meta def default_class_pool : listdict string string :=
+meta def default_class_pool : pool :=
 listdict.of [
   ("category", ["C", "D", "E"]),
   ("group", ["G", "H"]),

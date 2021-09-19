@@ -111,4 +111,7 @@ meta def get : pattern_table α → expr → tactic (list α)
 meta def of_list : list (entry α) → pattern_table α
 | l := list.foldr insert ∅ l
 
+meta instance pt_has_append : has_append (pattern_table α ) :=
+show has_append (listdict _ _), by apply_instance
+
 end pattern_table

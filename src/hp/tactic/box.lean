@@ -4,6 +4,7 @@ open tactic.unsafe list.zipper combinator
 
 namespace hp
 
+/- The box is the key structure of the humanproof system. See https://edayers.com/thesis/box -/
 meta inductive box : Type
 | I (h : binder) (b : box)
 | V (s : source) (b : box)
@@ -14,9 +15,17 @@ meta inductive box : Type
 
 namespace box
 
-meta def as_R : box → option expr | (box.R e) := some e | _ := none
-meta def as_T : box → option (binder × box) | (box.T h b) := some (h,b) | _ := none
-meta def as_T_prop : box → type_context (binder × box) | b := do
+meta def as_R : box → option expr
+| (box.R e) := some e
+| _ := none
+
+meta def as_T : box → option (binder × box)
+| (box.T h b) := some (h,b)
+| _ := none
+
+/-- Returns a target with the additional guard that the target is a proposition. -/
+meta def as_T_prop : box → type_context (binder × box)
+| b := do
   bb@⟨⟨_,bi, y⟩ ,_⟩ ← alternative.returnopt $ as_T b,
   yy ← type_context.infer y,
   ip : bool ← pure $ to_bool $ yy = `(Prop),
@@ -25,6 +34,7 @@ meta def as_T_prop : box → type_context (binder × box) | b := do
 
 meta def Impossible : box := box.O []
 
+/-- Equality check for a pair of boxes. [todo] decidable equality fails due to nested list in inductive datatype. -/
 protected meta def eq : box → box → bool
 | (I h1 b1) (I h2 b2) := h1 = h2 ∧ eq b1 b2
 | (V s1 b1) (V s2 b2) := s1 = s2 ∧ eq b1 b2
@@ -34,6 +44,7 @@ protected meta def eq : box → box → bool
 | (R r1) (R r2) := r1 = r2
 | _ _ := ff
 
+/-- Apply `f` to each of the expression children of the box. -/
 protected meta def mmap_children {m} [monad m] (f : telescope → expr → m expr) : telescope → box → m box
 | Γ (I h b) := do h ← (Γ ⍄ f $ h), pure I <*> pure h <*> mmap_children (h::Γ) b
 | Γ (V s b) := pure V <*> (Γ ⍄ f $ s) <*> mmap_children Γ b
@@ -48,6 +59,8 @@ protected meta def mmap_children {m} [monad m] (f : telescope → expr → m exp
   b2 ← mmap_children (h::Γ) b2,
   pure $ A b1 h b2
 | Γ (R s) := pure R <*> (Γ ⍄ f $ s)
+
+meta instance : assignable box := ⟨@box.mmap_children⟩
 
 protected meta def pp : box → tactic format
 | (I h b) := format.nest_join "I " [tactic.pp h, pp b]
@@ -65,7 +78,7 @@ protected meta def to_fmt : box → format
 | (A b1 h b2) := format.nest_join_pure "A " [to_fmt b1, "~~~", to_string h, "~~~", to_fmt b2]
 | (R s) := format.nest_join_pure "R " [to_string s]
 
-meta instance : assignable box := ⟨@box.mmap_children⟩
+
 meta instance : has_to_tactic_format box := ⟨box.pp⟩
 meta instance : decidable_eq box | b1 b2 := unchecked_cast $ box.eq b1 b2
 

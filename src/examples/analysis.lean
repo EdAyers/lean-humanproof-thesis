@@ -9,6 +9,8 @@ class met_space (X : Type) extends has_dist X :=
 (dist_comm : ∀ x y, dist x y = dist y x)
 (dist_triangle : ∀ x y z, dist x z ≤ dist x y + dist y z)
 
+attribute [classnoun "metric space"] met_space
+
 open met_space
 
 variables {X Y: Type} [met_space X] [met_space Y] {A B : set X}
@@ -23,7 +25,6 @@ def is_uniform_limit (f : ℕ → X → Y) (g : X → Y) :=
 
 def continuous (f : X → Y) :=
 ∀ (x : X), ∀ (ε : ℝ), (ε > 0) → ∃ (δ : ℝ), (δ > 0) ∧ ∀ (y : X), dist x y < δ → dist (f x) (f y) < ε
-
 @[reducible]
 def sequence (X : Type) := ℕ → X
 

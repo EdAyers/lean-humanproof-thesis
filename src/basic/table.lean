@@ -91,23 +91,28 @@ namespace dict
     := rb_map.fold r l $ λ k a acc, acc.modify (λ o, option.rec_on o a $ merger k a) k
     meta instance : has_append (dict k α) := ⟨merge⟩
     meta def fold {β} (r : β → k → α → β) (z : β) (d : dict k α) : β := rb_map.fold d z (λ k a b, r b k a)
-    meta def mfold {T} [monad T] {β} (f : β → k → α → T β) (z : β) (d : dict k α) : T β := rb_map.mfold d z (λ k a b, f b k a)
+    meta def mfold {T} [monad T] {β} (f : β → k → α → T β) (z : β) (d : dict k α) : T β :=
+    rb_map.mfold d z (λ k a b, f b k a)
     meta def map {β} (f : α → β) (d : dict k α) : dict k β := rb_map.map f d
-    meta def filter (p : k → α → bool) (d : dict k α) := fold (λ d k a, if p k a then insert k a d else d) empty d
+    meta def filter (p : k → α → bool) (d : dict k α) :=
+    fold (λ d k a, if p k a then insert k a d else d) empty d
     meta def collect {β} (f : k → α → dict k β) := fold (λ d k a, d ++ f k a) empty
-    meta def choose {β} (f : k → α → option β) := fold (λ d k a, match f k a with (some b) := insert k b d | none := d end) empty
+    meta def choose {β} (f : k → α → option β) :=
+    fold (λ d k a, match f k a with (some b) := insert k b d | none := d end) empty
     meta def keys : dict k α → table k := fold (λ acc k v, table.insert k acc) ∅
     meta def to_list : dict k α → list (k×α) := rb_map.to_list
     meta def min : dict k α → option α := rb_map.min
     meta def max : dict k α → option α := rb_map.max
-    /--[HACK] not efficient, don't use in perf critical code. Use min.-/
-    meta def first : dict k α → option (k×α) := fold (λ o k a, option.rec_on o (some (k,a)) some) none
+    /--[HACK] not efficient. Use min if you don't need the key.-/
+    meta def first : dict k α → option (k×α) :=
+    fold (λ o k a, option.rec_on o (some (k,a)) some) none
     meta def any (f : k → α → bool) : dict k α → bool := fold (λ o k a, o || f k a) ff
     meta def all (f : k → α → bool) : dict k α → bool := fold (λ o k a, o && f k a) tt
     meta instance dict_has_union [has_union α] : has_union (dict k α) := ⟨dict.merge_with (λ _, (∪))⟩
     section formatting
         open format
-        meta instance [has_to_string α] [has_to_string k] : has_to_string (dict k α) := ⟨λ d,  (λ s, "{" ++ s ++ "}") $ list.to_string $ dict.to_list $ d⟩
+        meta instance [has_to_string α] [has_to_string k] : has_to_string (dict k α) :=
+        ⟨λ d,  (λ s, "{" ++ s ++ "}") $ list.to_string $ dict.to_list $ d⟩
         -- meta instance has_to_format [has_to_format α] [has_to_format k] : has_to_format (dict k α) := ⟨λ d,
         --     to_fmt "{" ++ group (nest 1 $ join $ list.intersperse ("," ++ line) $ list.map (λ (p:k×α), to_fmt p.1 ++ " ↦ " ++ to_fmt p.2) $ dict.to_list d) ++ to_fmt "}"
         -- ⟩
@@ -118,7 +123,7 @@ namespace dict
     end formatting
 end dict
 
-/--dictionary with a default if it doesn't exist. You define the default when you make the dictionary. -/
+/-- dictionary with a default if it doesn't exist. You define the default when you make the dictionary. -/
 meta structure dictd (k : Type) (α : Type) : Type :=
 (val : dict k α)
 (default : k → α)
@@ -128,7 +133,8 @@ namespace dictd
   meta instance [inhabited α] : has_emptyc (dictd k α) := ⟨empty (λ _, inhabited.default α)⟩
   meta def get (key : k) (dd : dictd k α) : α := dict.get_default (dd.2 key) key dd.1
   meta def insert (key : k) (a : α) (dd : dictd k α) : dictd k α := ⟨dict.insert key a dd.1, dd.2⟩
-  meta def modify (f : α → α) (key : k) (dd : dictd k α) : dictd k α := ⟨dict.modify (λ o, f $ option.get_or_else o (dd.2 key)) key dd.1, dd.2⟩
+  meta def modify (f : α → α) (key : k) (dd : dictd k α) : dictd k α :=
+  ⟨dict.modify (λ o, f $ option.get_or_else o (dd.2 key)) key dd.1, dd.2⟩
   meta def of_dict (default : k → α) : dict k α → dictd k α := λ d, ⟨d, default⟩
 end dictd
 
@@ -140,11 +146,16 @@ namespace tabledict
     variables {κ α : Type} [has_lt κ] [decidable_rel ((<) : κ → κ → Prop)] [has_lt α] [decidable_rel ((<) : α → α → Prop)]
     meta def empty : tabledict κ α := dict.empty
     meta instance : has_emptyc (tabledict κ α) := ⟨empty⟩
-    meta def insert : κ → α → tabledict κ α → tabledict κ α := λ k a d, dict.modify_default ∅ (λ t, t.insert a) k d
-    meta def erase : κ → α → tabledict κ α → tabledict κ α := λ k a d, dict.modify_when_present (λ t, t.erase a) k d
-    meta def get : κ → tabledict κ α → table α := λ k t, dict.get_default ∅ k t
-    meta def contains : κ → α → tabledict κ α → bool := λ k a d,  match dict.get k d with |(some t) := t.contains a | none := ff end
-    meta instance [has_to_tactic_format κ] [has_to_tactic_format α] : has_to_tactic_format (tabledict κ α) := ⟨λ (d : dict κ (table α)), tactic.pp d⟩
+    meta def insert : κ → α → tabledict κ α → tabledict κ α :=
+    λ k a d, dict.modify_default ∅ (λ t, t.insert a) k d
+    meta def erase : κ → α → tabledict κ α → tabledict κ α :=
+    λ k a d, dict.modify_when_present (λ t, t.erase a) k d
+    meta def get : κ → tabledict κ α → table α :=
+    λ k t, dict.get_default ∅ k t
+    meta def contains : κ → α → tabledict κ α → bool :=
+    λ k a d,  match dict.get k d with |(some t) := t.contains a | none := ff end
+    meta instance [has_to_tactic_format κ] [has_to_tactic_format α] : has_to_tactic_format (tabledict κ α) :=
+    ⟨λ (d : dict κ (table α)), tactic.pp d⟩
     meta def fold {β} (f : β → κ → α → β) : β → tabledict κ α → β := dict.fold (λ b k, table.fold (λ b, f b k) b)
     meta def mfold {T} [monad T] {β} (f : β → κ → α → T β) : β → tabledict κ α → T β := dict.mfold (λ b k, table.mfold (λ b, f b k) b)
     meta def to_list : tabledict κ α → list α := list.collect (table.to_list ∘ prod.snd) ∘ dict.to_list
@@ -161,7 +172,8 @@ namespace listdict
     meta instance : has_emptyc (listdict κ α) := ⟨empty⟩
     meta def insert : κ → α → listdict κ α → listdict κ α | k a d := dict.modify_default [] (λ t, a :: t) k d
     meta def inserts: κ → list α → listdict κ α → listdict κ α | k as d := dict.modify_default [] (λ t, as ++ t) k d
-    meta def pop : κ → listdict κ α → option (α × listdict κ α) | k d := match dict.get_default [] k d with |[] := none |(h::t) := some (h, dict.insert k t d)  end
+    meta def pop : κ → listdict κ α → option (α × listdict κ α) | k d :=
+    match dict.get_default [] k d with |[] := none |(h::t) := some (h, dict.insert k t d)  end
     meta def get : κ → listdict κ α → list α | k d := dict.get_default [] k d
     meta def fold {β} (f : β → κ → α → β) : β → listdict κ α → β := dict.fold (λ b k, list.foldl (λ b, f b k) b)
     meta def mfold {T} [monad T] {β} (f:β → κ → α → T β) : β → listdict κ α → T β := dict.mfold (λ b k, list.mfoldl (λ b, f b k) b)
@@ -170,9 +182,11 @@ namespace listdict
     meta instance has_pp [has_to_tactic_format κ] [has_to_tactic_format α] : has_to_tactic_format (listdict κ α) := ⟨λ (d : dict κ (list α)), tactic.pp d⟩
     meta def of : list (κ × list α) → listdict κ α := list.foldl (λ acc p, prod.rec inserts p acc) ∅
     meta def map {β} (f : α → β) : listdict κ α → listdict κ β := dict.map (list.map f)
+    meta def append : listdict κ α → listdict κ α → listdict κ α := dict.merge_with (λ k, (++))
+    meta instance ld_has_append : has_append (listdict κ α) := ⟨append⟩
 end listdict
 
-/--A table which tracks the number of times that a given key has been inserted. -/
+/-- A table which tracks the number of times that a given key has been inserted. -/
 meta def mtable (κ : Type) [has_lt κ] [decidable_rel ((<) : κ → κ → Prop)] : Type := dict κ ℕ
 
 namespace mtable

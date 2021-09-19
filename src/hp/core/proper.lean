@@ -151,6 +151,8 @@ meta def smallest_absent_composite_subterms (lhs : expr) (rhs : zipper) :=
 
 /-- The pretty printer will automatically instantiate vars which leads to an issue where
 earlier clauses will talk about variables that later get assigned.
+The 'dummifier' solves this by replacing instantiated metavariables with dummy undeclared
+variables before they are pretty printed.
 -/
 meta def dummify {α} [assignable α] : (expr × name) → α → tactic α
 | ⟨ms, n⟩ x := do
@@ -269,6 +271,7 @@ meta def get_distance (outer : expr) (l : expr) (r : expr) : tactic ℕ := do
 meta def get_proper_children (e : expr) : tactic (list expr) := do
     e ← tactic.instantiate_mvars e,
     (list.map cursor <$> prod.snd <$> (down_proper $ zip e)) <|> pure []
+
 meta def get_smallest_complex_subterms (z : zipper) : tactic (list zipper) := do
     minimal_monotone (λ z, do ⟨_,[]⟩ ← down_proper z | failure, pure z) z
 

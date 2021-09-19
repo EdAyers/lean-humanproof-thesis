@@ -118,4 +118,10 @@ meta def with_state {α} : tactic_state → tactic α → tactic α
     write tso,
     pure a
 
+meta def return_except {α ε} [has_to_format ε] : except ε α → tactic α
+| (except.ok a) := pure a
+| (except.error e) := tactic.fail e
+
+
+
 end tactic

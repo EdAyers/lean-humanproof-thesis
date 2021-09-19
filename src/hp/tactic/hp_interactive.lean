@@ -76,7 +76,7 @@ meta def istep_core {α : Type} (line0 col0 line col : nat) (t : hp α) : hp uni
   | (exception none p s') := silent_fail s'
   end
 
-meta def istep {α : Type} (line0 col0 line col : nat) (r : hp α) : hp unit :=
+meta def istep {α : Type} (line0 col0 line col ast : nat) (r : hp α) : hp unit :=
 istep_core line0 col0 line col r
 
 meta instance : interactive.executor hp :=

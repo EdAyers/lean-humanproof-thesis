@@ -64,7 +64,7 @@ attribute [equate] mul_sub_right_distrib
 namespace set_rules
     universe u
     variables {α : Type u} {A B C : set α}
-    def ext : (∀ a, a ∈ A ↔ a ∈ B) → A = B := begin intro, funext, rw <-iff_eq_eq, apply a x end
+    def ext : (∀ a, a ∈ A ↔ a ∈ B) → A = B := begin intro h, funext, rw <-iff_eq_eq, apply h x end
     @[equate] def A1 : A \ B = A ∩ (Bᶜ) := begin refl end
     @[equate] def A2 : ( B ∩ C )ᶜ = Bᶜ ∪ Cᶜ := ext $ λ a, ⟨λ h, classical.by_cases (λ aB, classical.by_cases (λ aC, absurd (and.intro aB aC) h) or.inr ) or.inl,λ h, or.cases_on h (λ h ⟨ab,_⟩, absurd ab h) (λ h ⟨_,ac⟩, absurd ac h)⟩
     -- @[equate] def A3 :  - ( B ∪ C ) = - B ∩ - C := ext $ λ a, ⟨λ h, ⟨h ∘ or.inl,h ∘ or.inr⟩, λ ⟨x,y⟩ h₂, or.cases_on h₂ x y⟩

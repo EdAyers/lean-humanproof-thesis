@@ -1,6 +1,10 @@
 /- © E.W.Ayers 2019 -/
 import meta.expr
 
+def binder_info.is_explicit : binder_info → bool
+| binder_info.default := tt
+| _ := ff
+
 namespace binder
 
 meta def push_local : binder → tactic.unsafe.type_context expr
@@ -24,5 +28,11 @@ meta def to_lam : binder → expr → expr
 
 meta def mk_local : binder → tactic expr
 | ⟨n, i, y⟩ := tactic.mk_local' n i y
+
+meta def is_explicit : binder → bool
+| ⟨n, i, y⟩ := i.is_explicit
+
+meta def mk_default : _root_.name → expr → binder
+| n y := ⟨n,binder_info.default,y⟩
 
 end binder

@@ -106,7 +106,7 @@ meta def dequeue : pqueue p → option (α × pqueue p)
 | pq := do
   q ← dict.min pq,
   (a,q) ← q.dequeue, -- should not be empty
-  if is_empty q then pure (a, dict.erase (p a) pq) else
+  if queue.is_empty q then pure (a, dict.erase (p a) pq) else
   pure (a, dict.insert (p a) q pq)
 
 meta def of_list : list α → pqueue p

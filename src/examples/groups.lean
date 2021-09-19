@@ -1,4 +1,5 @@
 import group_theory.group_action group_theory.coset
+import hp.tactic.hp_interactive
 
 namespace examples
 
@@ -11,7 +12,8 @@ attribute [class] is_hom
 variables [is_hom f]
 lemma is_hom.one : f 1 = 1 :=
 begin
-  apply eq_one_of_mul_self_left_cancel,
+  apply mul_right_eq_self.1,
+  show (f 1) * (f 1) = (f 1),
   rw ←‹is_hom f›,
   simp,
 end
@@ -70,26 +72,29 @@ begin
                    ... = 1                 : by simp
 end
 
-#check subgroup.normal
-
 end
 
 section
 
 variables {G : Type} [group G]
+
+lemma test_1 (x : G) : x = x :=
+begin [hp]
+
+end
+
 variables {H : subgroup G} {a b : G}
 
-#check left_coset
-
 lemma mem_own_left_coset : a ∈ left_coset a H :=
-begin
-  show ∃ (h : G), (h ∈ H) ∧ a * h = a,
-  use (1 : G),
-  split,
-  show (1 : G) ∈ H,
-    apply subgroup.one_mem,
-  show a * (1 : G) = a,
-    simp
+begin [hp]
+
+  -- show ∃ (h : G), (h ∈ H) ∧ a * h = a,
+  -- use (1 : G),
+  -- split,
+  -- show (1 : G) ∈ H,
+  --   apply subgroup.one_mem,
+  -- show a * (1 : G) = a,
+  --   simp
 end
 
 theorem G1 : (left_coset a H = left_coset b H) ↔ b⁻¹ * a ∈ H :=
@@ -133,19 +138,19 @@ end
 
 /- Every kernel is a normal subgroup -/
 
-def kernel {H G : Type} [group H] [group G] (f : H → G) [group_hom]
+-- def kernel {H G : Type} [group H] [group G] (f : H → G) [group_hom]
 
-example :
+-- example :
 
-/- This one is too classical.
+-- /- This one is too classical.
 
- -/
--- example : (¬ disjoint (left_coset a H) (left_coset b H)) → left_coset a H = left_coset b H :=
--- begin
---   intros h₁,
---   refine (G1 ).2 _,
---   apply set.disjoint.union_left
--- end
+--  -/
+-- -- example : (¬ disjoint (left_coset a H) (left_coset b H)) → left_coset a H = left_coset b H :=
+-- -- begin
+-- --   intros h₁,
+-- --   refine (G1 ).2 _,
+-- --   apply set.disjoint.union_left
+-- -- end
 
 end
 
