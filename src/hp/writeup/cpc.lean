@@ -38,7 +38,7 @@ meta def condense_pair : cpc → cpc → tactic (cpc)
 | (c₁@⟨xs₁,cps₁⟩) (c₂@⟨xs₂, cps₂⟩) := do
   -- tactic.trace ("pair:", c₁, c₂),
   -- tactic.trace ("  ", expr.local_uniq_name <$> xs₁, expr.local_uniq_name <$> xs₂),
-  xs_eq ← list.m_all (λ p : expr × expr, (tactic.is_def_eq p.1 p.2 *> pure tt) <|> pure ff) (list.zip xs₁ xs₂),
+  xs_eq ← list.m_all (λ p : expr × expr, alternative.is_ok (tactic.is_def_eq p.1 p.2)) (list.zip xs₁ xs₂),
   if xs₁.length = xs₂.length ∧ xs_eq then do
     -- tactic.trace "same xs",
     match cps₁ with
@@ -114,7 +114,7 @@ meta def to_cpcs (decls_only : bool) : list expr → tactic (list cpc × list ex
   (cpcs, rest) ← xs.apartition (λ x, do
     cpc ← cpc.of_expr t x,
     -- only include cpcs that explicitly mention a subject.
-    -- guardb $ ¬decls_only ∨ subjects.any (λ subject, contains_subject subject cpc),
+    guardb $ ¬decls_only ∨ subjects.any (λ subject, contains_subject subject cpc),
     pure cpc
   ),
   cpcs ← condense cpcs,
