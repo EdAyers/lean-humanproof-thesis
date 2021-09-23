@@ -285,18 +285,6 @@ meta inductive path : Type
 | A1 (h : binder) (b2 : box) (p : path)
 | A2 (b1 : box) (s : stub) (p : path) -- don't bother figuring out declaration of b1, the result of b1 is just an opaque stub.
 
--- meta inductive path.item : Type
--- | I (h : hyp) (dummy_goal : expr)
--- | V (s : source)
--- | O (bs : list.zipper box)
--- | T (s : stub)
--- | A1 (h : binder) (b2 : box)
--- | A2 (b1 : box) (s : stub)
-
--- meta structure path2 : Type :=
--- (dummy_goal : expr)
--- (items : list path.item)
-
 namespace path
 
   protected meta def pp_core : path → tactic (format)
@@ -977,8 +965,9 @@ namespace Z
     | zz := do
       run_tactic zz pure
 
--- [todo] move this to waterfall.
-    meta def split : (Z unit) → m unit -- [todo] multi-split things.
+    -- [todo] move this to waterfall.
+    -- [todo] multi-split.
+    meta def split : (Z unit) → m unit
     | zz := do
       run_tactic (zz *> down_stub) (λ s, do
         monad_lift $ tactic.set_goals [s],

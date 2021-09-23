@@ -3,8 +3,6 @@ import group_theory.subgroup
 /-!
 This file contains the default class-predicate-collections for the humanproof writeup.
 
-[todo] Use attributes instead of a hard-coded table for class predicates.
-
 -/
 
 namespace hp.writeup

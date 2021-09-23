@@ -76,11 +76,12 @@ end
 
 section
 
-variables {G : Type} [group G]
+variables {G : Type} [group G] {H : Type}
 
-lemma test_1 (x : G) : x = x :=
+lemma test_1 (x y : G) (z : H) : Π (a b : G), x = x :=
 begin [hp]
-
+  trace_writeup,
+  unroll,
 end
 
 variables {H : subgroup G} {a b : G}

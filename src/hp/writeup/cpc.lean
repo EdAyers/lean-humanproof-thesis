@@ -1,33 +1,21 @@
 import .run .data .table
 
+/-!
+Class predicate collections, as described in https://www.edayers.com/thesis/box#nlg-binders
+-/
+
 namespace hp.writeup
 
 open hp.writeup.run
 
 open tactic
 
--- meta def show_x := λ x, tactic.to_expr x >>= tactic.get_classes >>= tactic.trace
--- example (H : Type) [group H] : Π (G : Type) [group G] (x : G) (y:H), true :=
--- begin
---   (do
---     [_,_,x,y] ← intros,
---     t ← to_pexpr <$>infer_type x,
---     ty ← to_pexpr <$>infer_type y,
---     show_x $ t,
---     show_x $ to_pexpr ty,
---     pure ()
---   ),
---   trivial
--- end
-
--- (ct : hp.pattern_table )
--- special case is `x : α` where α is a local constant, in this case you derive a relative classnoun by inspecting the classes instantiable on α. This case should also only be used if none of the pt entries fit.
-
 meta def cp.contains_FoldAdj : list cp → bool
 | l := option.is_some $ list.bfind cp.is_FoldAdjective l
 
 section
 variables {m : Type → Type} [monad m]
+/-- Given the predicate `f`, partition the list in to two according to the presence of the predicate. -/
 meta def cpc.partition_subjects (f : expr → m bool) : list cpc → m ((list cpc) × (list cpc))
 | (⟨xs, ps⟩ :: rest) := do
   (i, o) ← list.mpartition f xs,
@@ -70,20 +58,26 @@ meta def condense_filter : cpc → bool
 meta def condense : list cpc → tactic (list cpc) | cpcs := do
   cpcs ← pure $ list.bfilter condense_filter cpcs,
   cpcs ← list.pair_rewrite condense_pair cpcs,
-  -- tactic.trace ("after condense:", cpcs),
   pure cpcs
 
-meta def cpc.of_local (t : writeup_table) (term type : expr) : tactic cpc := do
-  lct ← pure t.lct,
+/-- This is used to create a cpc in the case that the given term's type is a
+local constant. This happens eg with `x : G` ↝ "x is an element of G"-/
+meta def cpc.of_local (t : writeup_table) (term : expr) : tactic cpc := do
   y ← infer_type term,
-  cs ← tactic.get_classes y, -- [fixme] sadly this fails for class instances that were intro'd :(
+  -- [fixme] sadly, this fails for class instances that were intro'd
+  cs ← tactic.get_classes y,
   ip ← is_prop y,
+  -- find the first class in xs that has a entry in the writeup table.
+  -- this will be used as an adjective to describe it.
+  -- e.g., if `x : G` and `[group G]` then we get "let x be an element of G".
   r : cp ← @list.mfirst tactic _ _ _ _ (λ c, do
     match t.lct.get c with
     | (none) := failure
     | (some x) := pure (x y)
     end
   ) cs
+  -- if there is no such class, a fallback is to just write "let x : G".
+  -- unless the type `y` is a proposition.
   <|> ((guardb ¬ip) *> (pure $ cp.SymbolicPostfix $ Text ":" ++ Math y)),
   pure ⟨[term], [r]⟩
 
@@ -94,45 +88,36 @@ meta def cpc.type_symb (type val: expr) : cpc :=
 meta def cpc.of_expr (t : writeup_table) : expr → (tactic cpc)
 | e := do
   y ← infer_type e,
-  -- tactic.trace y,
   match y with
-  | (expr.local_const _ _ _ _) := cpc.of_local t e y
+  | (expr.local_const _ _ _ _) := cpc.of_local t e
   | (expr.sort level.zero) := pure ⟨[e], [cp.ClassNoun "proposition" "propositions"]⟩
   | (expr.sort _) := pure ⟨[e], []⟩
   | y := do
     xs ← pattern_table.get t.cpct y,
     ip ← is_prop y,
-    -- tactic.trace "\ncpc.of_expr:",
-    -- tactic.trace (ip, e, y, xs.length),
     xs ← if ip then pure xs else pure $ xs ++ [cpc.type_symb y],
-    xs ← pure $ xs.map (λ f, f $ e),
-    -- tactic.trace $ xs,
-    -- tactic.trace "\n",
-    cpc ← xs.mfirst (λ f, do
-      cp ← pure $ f,
-      pure cp
-    ),
-    -- tactic.trace cpc,
-    -- tactic.trace "end cpc.of_expr.\n",
+    xs ← pure $ xs.map ($ e),
+    cpc ← xs.mfirst pure,
     pure cpc
   end
 
+/-- Converts a list of subject expressions to a list of cpcs and a list of 'remenant' expressions.
+Usually the list of expressions are local constants that have just been introduced. -/
 meta def to_cpcs (decls_only : bool) : list expr → tactic (list cpc × list expr)
 | xs := do
-  -- tactic.trace "\nbegin to_cpcs",
-  -- tactic.trace xs,
   t ← get_writeup_table,
-  (decls, others) ← xs.mpartition (λ x, pure bor <*> is_term x <*> pure (expr.is_sort x)),
-  -- tactic.trace (decls, others),
+  -- ① an expression is a 'decl' if its a term or a sort. (ie, not a typeclass or a proof)
+  -- these are the 'subjects'
+  (subjects, others) ← xs.mpartition (λ x, pure bor <*> is_term x <*> pure (expr.is_sort x)),
+  -- ② now convert each of the xs to a cpc.
+  -- if it fails then it goes in a 'rest' list
   (cpcs, rest) ← xs.apartition (λ x, do
     cpc ← cpc.of_expr t x,
-    guardb $ ¬decls_only ∨ decls.any (λ decl, contains_subject decl cpc), -- only include facts whose subject is a declaration
+    -- only include cpcs that explicitly mention a subject.
+    -- guardb $ ¬decls_only ∨ subjects.any (λ subject, contains_subject subject cpc),
     pure cpc
   ),
-  -- tactic.trace (cpcs, rest),
   cpcs ← condense cpcs,
-  -- tactic.trace (cpcs),
-  -- tactic.trace "end to_cpcs\n",
   pure (cpcs, rest)
 
 meta def to_cpc : expr → tactic cpc
@@ -140,6 +125,7 @@ meta def to_cpc : expr → tactic cpc
   t ← get_writeup_table,
   cpc.of_expr t e
 
+/-- Tests if the given expression is contained as a subject of the given list of cpcs -/
 meta def contains : expr → list cpc → bool
 | x cpcs := list.any cpcs (λ ⟨xs,_⟩, x ∈ xs)
 

@@ -20,7 +20,7 @@ meta def as_And : Statement → option (list Statement)
 meta def is_True : Statement → bool
 | (Statement.And []) := tt | _ := ff
 
-/-- ⋀ a load of statements -/
+/-- ⋀ a list of statements -/
 meta def meet : list Statement → Statement
 | ss := Statement.And $ list.collect (λ x,
       match x with
@@ -176,11 +176,15 @@ meta def parse_take : list_parser tact tactic (list Sentence) := do
   takes ← pure $ takes.reverse,
 --   monad_lift $ tactic.trace "\nparse_take",
 --   monad_lift $ tactic.local_context >>= tactic.trace,
-  new_vars ← ⍐ $ list.mfilter (λ x, pure bor <*> is_term x <*> is_type x) $ takes.map hyp.to_expr,
-  (cpcs, other_hyps) ← ⍐ $ to_cpcs ff $ list.map hyp.to_expr $ takes,
---   monad_lift $ tactic.trace "~~~ parse_take ~~~ ",
---   monad_lift $ tactic.trace $ cpcs,
+  takes ← pure $ list.map hyp.to_expr $ takes,
+  new_vars ← ⍐ $ list.mfilter (λ x, pure bor <*> is_term x <*> is_type x) $ takes,
+  (cpcs, other_hyps) ← ⍐ $ to_cpcs ff $ takes,
+  monad_lift $ tactic.trace "~~~ parse_take ~~~ ",
+  monad_lift $ tactic.trace $ new_vars,
+  monad_lift $ tactic.trace $ cpcs,
   (new_var_cpcs, cpcs) ← cpc.partition_subjects (λ x, pure $ x ∈ new_vars) cpcs,
+  monad_lift $ tactic.trace $ new_var_cpcs,
+  monad_lift $ tactic.trace $ cpcs,
   (new_var_cpcs, cpcs₂) ← pure $ first_mentions ([],[]) new_var_cpcs,
   other_hyps_smt ← monad_lift $ (Statement.meet <$> list.mmap (infer_type >=> Statement.ofProp) other_hyps),
   cpc_smt ← pure $ Statement.meet $  list.map Statement.CPC $ cpcs ++ cpcs₂,

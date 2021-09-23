@@ -176,16 +176,6 @@ meta def trace_result : hp unit := do
   tactic.trace b,
   pure ()
 
--- /-- Run f on each child until we find one that doesn't fail. -/
--- meta def pick_children {α} (f : hp α) : hp α :=
---   down_first *> pick_right f
-
--- meta def pick_target {α} (f : hp α) : hp α :=
--- f <|> (do next, pick_target)
-
--- meta def all_targets (f : hp unit) : hp unit :=
--- do f, (next *> all_targets) <|> pure ()
-
 open tactic
 
 -- meta def match_target (p : pexpr) : hp (list expr) := do
@@ -247,7 +237,7 @@ meta def create_hp_state : tactic hp_state := do
   gs ← get_goals,
   -- set_goals $ gs ++ [dummy_goal],
   ts ← tactic.read,
-  writeup ← prod.mk ts <$> writeup.act.Intro <$> (list.mmap hyp.of_expr $ ctx),
+  writeup ← prod.mk ts <$> writeup.act.Intro <$> (list.mmap hyp.of_expr $ list.reverse $ ctx),
   -- ppgs ← pp gs,
   pure $ { hp_state
          . ts := ts
