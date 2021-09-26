@@ -20,12 +20,15 @@ def open_ball (ε : ℝ) (x : X) := {y | dist x y < ε}
 def is_open (A : set X) : Prop :=
 ∀ (y : X), y ∈ A → ∃ (ε : ℝ), (ε > 0) ∧ ∀ (x : X), dist x y < ε → x ∈ A
 
+@[relational_noun_predicate "uniform limit" "uniform limits" "of"]
 def is_uniform_limit (f : ℕ → X → Y) (g : X → Y) :=
 ∀ (ε : ℝ), ε > 0 → ∃ (N : ℕ), ∀ (x : X), ∀ (n : ℕ), (n ≥ N) → dist (f n x) (g x) < ε
 
+@[adjective "continuous"]
 def continuous (f : X → Y) :=
 ∀ (x : X), ∀ (ε : ℝ), (ε > 0) → ∃ (δ : ℝ), (δ > 0) ∧ ∀ (y : X), dist x y < δ → dist (f x) (f y) < ε
-@[reducible]
+
+@[relational_noun "sequence" "sequences" "of"]
 def sequence (X : Type) := ℕ → X
 
 lemma dist_helper {ε η θ}
@@ -43,6 +46,7 @@ example (f : sequence (X → Y)) (g : X → Y)
 begin [hp]
   expand at T,
   unroll,
+  trace_writeup,
   split,
 
 end

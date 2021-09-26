@@ -87,7 +87,11 @@ meta def is_nil : run_item → bool
 | _ := ff
 
 meta def starts_with_vowel : run → bool
-| (Text s :: _) :=  list.any (string.to_list "AEIOUaeiou") (λ c, s.starts_with $ list.as_string [c])
+| (Text s :: _) :=
+  band
+    -- [note] there is an exception! "a uniform limit" not "an uniform limit"!
+    (bnot $ s.starts_with "uniform")
+    (list.any (string.to_list "AEIOUaeiou") (λ c, s.starts_with $ list.as_string [c]))
 | _ := ff
 
 meta def item.to_string  : run_item → string
@@ -99,6 +103,8 @@ meta def emit {m : Type → Type} {α : Type} [monad m] [monad_writer α m] (k :
 | (Text "" :: rest) := emit rest
 | (x :: Text "" :: rest) := emit $ x :: rest
 | (Text "a" :: rest) := do
+  -- if the next word starts with a vowel then replace with `an`.
+
   t ← k $ if starts_with_vowel rest then Text "an" else Text "a",
   tell t,
   k (Text " ") >>= tell,

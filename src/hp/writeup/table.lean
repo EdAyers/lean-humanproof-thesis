@@ -13,9 +13,19 @@ meta def prop_patterns : tactic (pattern_table Statement) := do
       ],
       pure $ pattern_table.of_list ps
 
+/-- The writeup_table contains all of the information for producing writeup phrases about definitions and propositions.
+
+There are three tables
+- `cpct` is the class predicate collection table
+- `lct` is the local-constant table. Suppose that `x : G` where `G` is a local constant in the context.
+  Then the `lct` is used to determine a class predicate for `x`. An example is that if we have `[group G]`, then
+  `x` should be introduced as "let x be an element of G". But if `[metric_space G]`, then we would have "let x be a point in G".
+- `pt` is the proposition table. It maps types of expression to Statements. An example is `f is continuous`.
+
+   -/
 meta structure writeup_table :=
 (cpct : pattern_table (expr → cpc))
-(lct : dict name (expr → cp)) -- eg `subgroup ↦ λ x,  "element of " ++ x.type` -- [todo] category morphism
+(lct : dict name (expr → cp)) -- eg `subgroup ↦ λ x,  "element of " ++ x.type` -
 (pt : pattern_table Statement)
 
 namespace writeup_table
@@ -36,6 +46,7 @@ meta def cp.relational_noun (singular : string) (plural : option string) (prepos
     (run.Text singular ++ preposition ++ run.Math rhs)
     (run.Text plural   ++ preposition ++ run.Math rhs)
 
+/-- Takes an `x : n α` to   -/
 meta def mk_adjective (n : name) (text : option string) : tactic (pattern_table.entry (expr → cpc)) := do
   f ← tactic.mk_const n,
   y ← tactic.infer_type f,
@@ -44,7 +55,7 @@ meta def mk_adjective (n : name) (text : option string) : tactic (pattern_table.
   subject_index ← telescope.find_index (λ b, b.is_explicit) ps,
   pattern ← pure $ to_pexpr $ telescope.reverse_beta ps f,
   text ← pure $ n.to_string <| text,
-  pattern_table.entry.of_pexpr pattern $ λ es, do subject ← es.nth subject_index, pure $ λ _, cpc.mk [subject] $ [cp.Adjective n.to_string]
+  pattern_table.entry.of_pexpr pattern $ λ es, do subject ← es.nth subject_index, pure $ λ _, cpc.mk [subject] $ [cp.Adjective text]
 
 meta def mk_classnoun (n : name) (singular plural : option string) : tactic (pattern_table.entry (expr → cpc)) := do
   f ← tactic.mk_const n,
@@ -67,6 +78,11 @@ meta def mk_noun (n : name) (singular plural : option string) : tactic (pattern_
   pattern ← pure $ to_pexpr $ telescope.reverse_beta ps f,
   pattern_table.entry.of_pexpr pattern $ λ es, do pure $ λ x, cpc.mk [x] $ [cp.ClassNoun singular plural]
 
+/-- Takes an `x : n α` to the cpc "let [x] be a [foo] [of] [α]".
+Where `foo` is the singular / plural string and `[of]` is the preposition string
+
+For example ``mk_relational_noun `subgroup "subgroup" "subgroups" "of"`` will convert a `H : subgroup G` to "let H be a subgroup of G".
+ -/
 meta def mk_relational_noun (n : name) (singular plural : option string) (preposition : string) : tactic (pattern_table.entry (expr → cpc)) := do
   f ← tactic.mk_const n,
   singular ← pure $ n.to_string <| singular,
@@ -77,6 +93,23 @@ meta def mk_relational_noun (n : name) (singular plural : option string) (prepos
   object_index ← telescope.find_index (λ b, b.is_explicit) ps,
   pattern ← pure $ to_pexpr $ telescope.reverse_beta ps f,
   pattern_table.entry.of_pexpr pattern $ λ es, do object ← es.nth object_index, pure $ λ subject, cpc.mk [subject] $ [cp.relational_noun singular plural preposition object]
+
+
+/-- Takes an `_ : n x α` to the cpc "let [x] be a [foo] [of] [α]".
+Where `foo` is the singular / plural string and `[of]` is the preposition string
+ -/
+meta def mk_relational_noun_from_proof (n : name) (singular plural : option string) (preposition : string) : tactic (pattern_table.entry (expr → cpc)) := do
+  f ← tactic.mk_const n,
+  singular ← pure $ n.to_string <| singular,
+  plural ← pure $ (singular ++ "s") <| plural,
+  y ← tactic.infer_type f,
+  (ps, b) ← pure $ telescope.of_pis y,
+  guard (ps.length > 0),
+  object_index :: subject_index :: _ ← pure $ telescope.find_indexes (λ b, b.is_explicit) ps,
+  pattern ← pure $ to_pexpr $ telescope.reverse_beta ps f,
+  pattern_table.entry.of_pexpr pattern $ λ es, do object ← es.nth object_index, subject ← es.nth subject_index, pure $ λ _, cpc.mk [subject] $ [cp.relational_noun singular plural preposition object]
+
+-- def mk_relational_noun_from_proof (n : name) (singular plural : option string) (preposition : string)
 
 meta def default_cpct : list (tactic (pattern_table.entry (expr → cpc))):= [
   -- mk_classnoun `group none none,
@@ -161,13 +194,68 @@ meta def writeup_classnoun_attr : user_attribute writeup_table (option string ×
   }
 }
 
+@[user_attribute]
+meta def writeup_adjective_attr : user_attribute writeup_table (option string) :=
+{ name := `adjective
+, descr := "Define the given predicate as an adjective. The last argument to the predicate is interpreted as the subject."
+, parser := (optional word)
+, cache_cfg :=
+  { mk_cache := (λ ns, do
+    ps ← ns.mmap (λ n, do
+      s ← user_attribute.get_param writeup_adjective_attr n,
+      mk_adjective n s
+    ),
+    pure $ writeup_table.mk (pattern_table.of_list ps) ∅ ∅)
+  , dependencies := []
+  }
+}
+
+@[user_attribute]
+meta def writeup_relational_noun_attr : user_attribute writeup_table (((option string) × (option string)) × (option string)) :=
+{ name := `relational_noun
+, descr := "Define the given predicate as an relational_noun. The last argument to the predicate is interpreted as the subject."
+, parser := (pure prod.mk) <*> ((pure prod.mk) <*> (optional word) <*> (optional word)) <*> (optional word)
+, cache_cfg :=
+  { mk_cache := (λ ns, do
+    ps ← ns.mmap (λ n, do
+      ((s,p), prep) ← user_attribute.get_param writeup_relational_noun_attr n,
+      prep ← pure $ "of" <| prep,
+      mk_relational_noun n s p prep
+    ),
+    pure $ writeup_table.mk (pattern_table.of_list ps) ∅ ∅)
+  , dependencies := []
+  }
+}
+
+@[user_attribute]
+meta def writeup_relational_noun_predicate_attr : user_attribute writeup_table (((option string) × (option string)) × (option string)) :=
+{ name := `relational_noun_predicate
+, descr := "Define the given predicate as an relational_noun. The last argument to the predicate is interpreted as the subject."
+, parser := (pure prod.mk) <*> ((pure prod.mk) <*> (optional word) <*> (optional word)) <*> (optional word)
+, cache_cfg :=
+  { mk_cache := (λ ns, do
+    ps ← ns.mmap (λ n, do
+      ((s,p), prep) ← user_attribute.get_param writeup_relational_noun_predicate_attr n,
+      prep ← pure $ "of" <| prep,
+      mk_relational_noun_from_proof n s p prep
+    ),
+    pure $ writeup_table.mk (pattern_table.of_list ps) ∅ ∅)
+  , dependencies := []
+  }
+}
+
+
 attribute [classnoun "group" "groups"] group
 attribute [classnoun "monoid" "monoids"] monoid
 
 meta def get_writeup_table : tactic writeup_table := do
   wt ← default_writeup_table,
-  cwt ← user_attribute.get_cache writeup_classnoun_attr,
-  pure $ wt ∪ cwt
+  wts ← list.mmap id $ [ user_attribute.get_cache $ writeup_classnoun_attr
+                        , user_attribute.get_cache $ writeup_adjective_attr
+                        , user_attribute.get_cache $ writeup_relational_noun_attr
+                        , user_attribute.get_cache $ writeup_relational_noun_predicate_attr],
+  wt ← pure $ list.foldl (∪) wt wts,
+  pure $ wt
   -- [todo] optimise by using 'dependencies' of attributes and daisy-chaining together the writeuptable.
 
 meta def get_prop_writeup : expr → tactic Statement | P  := do

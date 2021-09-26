@@ -228,4 +228,22 @@ meta instance cpc.has_to_string : has_to_string cpc := ⟨cpc.to_string⟩
 meta def contains_subject : expr → cpc → bool
 | e ⟨xs, _⟩ := e ∈ xs
 
+section
+variables {m : Type → Type} [monad m]
+meta def cp.mmap_exprs  (f : telescope → expr → m expr) : telescope → cp → m cp
+| Γ (cp.Adjective r) := (pure cp.Adjective) <*> ((Γ ⍄ f) r)
+| Γ (cp.FoldAdjective r) := (pure cp.FoldAdjective) <*> ((Γ ⍄ f) r)
+| Γ (cp.SymbolicPostfix r) := (pure cp.SymbolicPostfix) <*> ((Γ ⍄ f) r)
+| Γ (cp.ClassNoun s p) := pure (cp.ClassNoun s p)
+
+meta instance cp.has_assignable : assignable cp := ⟨@cp.mmap_exprs⟩
+
+meta def cpc.mmap_exprs (f : telescope → expr → m expr) : telescope → cpc → m cpc
+| Γ ⟨subjects, cps⟩ := (pure cpc.mk) <*> (list.mmap (f Γ) subjects) <*> (list.mmap (Γ ⍄ f) cps)
+
+meta instance cpc.has_assignable : assignable cpc := ⟨@cpc.mmap_exprs⟩
+
+-- meta def cpc.cpcs_assignable : assignable cpcs := by apply_instance
+
+end
 end hp.writeup

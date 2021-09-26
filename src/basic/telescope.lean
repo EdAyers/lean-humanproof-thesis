@@ -84,6 +84,9 @@ meta def find_index (predicate : binder → Prop) [decidable_pred predicate] : t
 | [] := none
 | (h :: t) := if predicate h then some t.length else find_index t
 
+meta def find_indexes (predicate : binder → Prop) [decidable_pred predicate] : telescope → list ℕ
+| [] := []
+| (h :: t) := if predicate h then (t.length) :: find_indexes t else find_indexes t
 
 meta def reverse_beta : telescope → expr → expr
 | Γ f := Γ.to_lams $ expr.mk_app f $ list.map expr.var $ list.reverse $ list.range Γ.length

@@ -116,7 +116,12 @@ with ofProp : expr → tactic Statement
                   ofProp b >>= ex ls.reverse
       | `(%%P ∧ %%Q) := do
                   pure Statement.conj <*> ofProp P <*> ofProp Q
-      | P := (get_prop_writeup P) <|> (pure $ Statement.TermStatement P)
+      | P := (do
+            wt ← get_writeup_table,
+            -- trace_m "ofProp: " $ P,
+            cpc ← cpc.of_prop wt P,
+            pure $ Statement.CPC cpc
+      ) <|> (get_prop_writeup P) <|> (pure $ Statement.TermStatement P)
       end
 
 meta def suff : list expr → Statement → tactic Statement

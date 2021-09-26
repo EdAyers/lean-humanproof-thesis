@@ -85,6 +85,21 @@ meta def cpc.of_local (t : writeup_table) (term : expr) : tactic cpc := do
 meta def cpc.type_symb (type val: expr) : cpc :=
 ⟨[val], [cp.SymbolicPostfix $ Text ":" ++ Math type]⟩
 
+/-- Get the cpc for a given proposition -/
+meta def cpc.of_prop (t : writeup_table) : expr → (tactic cpc)
+| y := do
+  ip ← is_prop y,
+  guardb ip,
+  xs ← pattern_table.get t.cpct y,
+  dummy ← pure $ (expr.local_const `dummy `dummy binder_info.default y),
+  xs ← pure $ xs.map ($ dummy),
+  xs ← pure $ xs.filter (λ x, bnot $ assignable.has_local_constant dummy x),
+  -- trace_m "cpc.of_prop: " $ xs,
+  xs ← pure $ list.bfilter condense_filter xs,
+  list.apick pure xs
+
+
+
 meta def cpc.of_expr (t : writeup_table) : expr → (tactic cpc)
 | e := do
   y ← infer_type e,
