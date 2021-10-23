@@ -40,9 +40,6 @@ Here is what it does:
   * In the case that `→ T` where `T` is a term, write this as 'whenever'.
 
 - `bake bs cpcs` transforms bs to a set of cpcs and then condenses them with the existing cpcs list.
-
-
-
  -/
 meta mutual def imp, bake, fa, ex, for_some, ofProp
 

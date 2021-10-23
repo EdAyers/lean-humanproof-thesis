@@ -26,6 +26,9 @@ meta def of_expr : expr → tactic stub
 meta def to_expr : stub → expr
 | s := s.mv
 
+meta def to_type : stub → tactic expr
+| s := infer_type $ to_expr s
+
 meta def to_binder : stub → binder
 | ⟨expr.mvar _ pn _, y⟩ := ⟨pn, binder_info.default, y⟩
 | _ := undefined_core "to_binder failed for stub"

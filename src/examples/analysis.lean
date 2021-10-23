@@ -40,6 +40,7 @@ lemma dist_helper {ε η θ}
 calc _ ≤ dist x y + dist y z : dist_triangle _ _ _
    ... < η + θ               : add_lt_add h₁ h₂
    ... ≤ ε                   : h₃
+
 example (f : sequence (X → Y)) (g : X → Y)
   (h₁ : is_uniform_limit f g)
   (h₂ : ∀ n, continuous (f n)) : continuous g :=

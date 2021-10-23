@@ -152,7 +152,7 @@ meta def intros : hp unit :=
 meta def cosplit : hp unit :=
   ZR.run $ try_all_targets $ ZR.cosplit
 
-meta def split : hp unit := ZR.run $ try_all_targets $ (split_conj_cmd) *> pure ()
+meta def split : hp unit := ZR.run $ try_all_targets $ (split_conj_cmd <|> split_exists) *> pure ()
 
 meta def trace_commands_at (n : name) : hp unit := do
   ZR.run (do

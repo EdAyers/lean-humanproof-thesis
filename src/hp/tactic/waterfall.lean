@@ -149,6 +149,7 @@ namespace ZR
     (a,_) ← monad_lift $ hp.hypothetically $ state_t.run zr z,
     pure a
 
+  /-- Apply the given zr but do not add any writeup clauses. -/
   meta def no_clauses {α} : ZR α → ZR α
   | zr := do
     z ← get,
@@ -310,6 +311,17 @@ meta def apply_ex_cases (rec: apply_fn) : apply_fn
   -- [todo] fix labelling of item if there is a clash
   pure $ writeup.ApplyTree.ExistsElim s t
 
+meta def apply_assumption (x : expr) : tactic unit :=
+(do
+    ip ← is_proof x,
+    if ip then do
+      a@(expr.local_const un pn bi y) ← infer_type x >>= find_assumption,
+      -- tactic.trace_state,
+      tactic.trace $ ("found assumption", un, pn),
+      exact a
+    else failure
+  )
+
 meta def apply_pi (rec: apply_fn): apply_fn
 | ctx goal := do
   r ← pure $ ctx.result,
@@ -328,16 +340,7 @@ meta def apply_pi (rec: apply_fn): apply_fn
   -- ⍐ $ tactic.trace "rec",
   -- ⍐ $ tactic.trace rt,
   t ← rec {result := r, type := rt} goal,
-  with_goals [x] $ (do
-    try $ (do
-    ip ← is_proof x,
-    if ip then do
-      a@(expr.local_const un pn bi y) ← infer_type x >>= find_assumption,
-      -- tactic.trace_state,
-      -- tactic.trace $ ("found assumption", un, pn),
-      exact a
-    else failure
-  ) <|> apply_instance),
+  with_goals [x] $ (try $ apply_instance), -- [todo] used to be apply_assumption here but it's unsafe.
   ia ← is_assigned x,
   if ia then do
     xx ← ⍐ $ tactic.instantiate_mvars x,
@@ -402,26 +405,13 @@ meta def apply (h: source) (g : expr) : ZR apply_result := do
   t ← ⍐ $ assignable.instantiate_mvars t,
   new_sources ← ⍐ $ list.mmap relabel_source $ writeup.ApplyTree.sources t,
   new_sources ← ⍐ $ assignable.instantiate_mvars new_sources,
-  -- replace_target new_targets,
   ⍐ $ box.Z.register_targets new_targets,
   ⍐ $ box.Z.push_sources_high new_sources,
   ⟨p, _⟩ ← get,
   s ← ⍐ $ stub.of_expr g,
   ⍐ $ with_goals (list.map stub.to_expr new_targets) $ ZR.push_input p $ [writeup.act.Apply s h t],
-  -- check_done,
   -- ⍐ $ tactic.trace "end apply\n",
   pure ⟨new_targets, new_sources⟩
-
--- meta def find_apply_first : hp unit := do
---   hs ← get_srcs,
---   list.apick (λ (h : source), do
---     apply h,
---     clean_all
---   ) hs,
---   pure ()
-
--- meta def induction_folder : list (expr × name × list expr × list (name × expr)) → expr → list expr → box → tactic box
--- | [] result [] b :=
 
 meta def cases_or : ZR unit := do
   box.V s b ← ⍐ $ box.Z.cursor,
@@ -556,14 +546,12 @@ meta def applycmds : ZR (list waterfall_command) := (ZR.hypothetically $ do
   )) <|> pure []
 
 meta def split_target : stub → ZR apply_result | g := do
-  -- ogs ← monad_lift $ tactic.get_goals,
-  -- ⍐ $ set_goals [g],
   [c] ← ⍐ $ infer_type g >>= get_constructors_for,
   c ← ⍐ $ mk_const c,
   s ← ⍐ $ source.of_expr `split c,
   res ← ZR.no_clauses $ apply s g,
-  -- ⍐ $ tactic.trace ("split_target", g.type),
-  -- monad_lift $ set_goals ogs,
+  new_target_types ← ⍐ $ list.mmap stub.to_type $ res.new_targets,
+  ⍐ $ trace_m "split_target: " $  new_target_types,
   ZR.commit,
   -- ZR.trace_state,
   pure res
@@ -572,10 +560,10 @@ meta def split_conj_cmd : ZR string := do
   g ← ⍐ $ box.Z.down_stub,
   y ← ⍐ $ infer_type g,
   yy ← ⍐ $ tactic.instantiate_mvars y,
-  -- ZR.trace_state,
   `(%%A ∧ %%B) ← pure y,
   r ← split_target g,
-  -- ⍐ $ trace_m "split_conj_cmd" $ (A,B),
+  ⍐ $ trace_m "split_conj_cmd " $ r.new_targets,
+
   [p, v] ← pure r.new_targets,
   ⟨path, _⟩ ← get,
   ⍐ $ ZR.push_input path $ singleton $ writeup.act.Andi v p,
@@ -583,7 +571,9 @@ meta def split_conj_cmd : ZR string := do
 
 meta def split_exists : ZR string := do
   g ← ⍐ $ box.Z.down_stub,
+  y ← ⍐ $ infer_type g,
   `(Exists %%A) ← ⍐ $ infer_type g,
+  ⍐ $ trace_m "split_exists" $ y,
   r ← split_target g,
   [p, v] ← pure r.new_targets,
   ⟨path, _⟩ ← get,
