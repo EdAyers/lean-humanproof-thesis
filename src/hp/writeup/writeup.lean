@@ -258,7 +258,7 @@ meta def result_to_reason : expr → tactic Reason
       (prems, conc) ← pure $ telescope.of_pis T,
       n ← pure $ telescope.count_leading_implicits prems,
       trace_m "result_to_reason: " $ (prems, n),
-      (f, args) ← pure $ expr.get_app_fn_args_n (prems.length - n) e,
+      (f, args) ← pure $ expr.get_app_fn_args_n (prems.length - n + 1) e,
       y ← infer_type f,
       smt ← Statement.ofProp y,
       trace_m "result_to_reason: " $ (f, args, smt),
