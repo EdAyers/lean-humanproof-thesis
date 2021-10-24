@@ -10,6 +10,7 @@ meta inductive SourceReason
 | Assumption (h : hyp)
 /-- Since x and y are prime. Use this if the source was expanded to something gnarly. -/
 | Since (r : expr)
+| Lemma (r : expr)
 /-- Forward reasoning was used -/
 | Forward (implication premiss : SourceReason)
 | And (r1 r2 : SourceReason) : SourceReason
@@ -24,6 +25,7 @@ meta inductive SourceReason
 meta def SourceReason.mmap_children {m} [monad m] (f : telescope → expr → m expr) (Γ : telescope) : SourceReason → m SourceReason
 | (SourceReason.Assumption h) := pure SourceReason.Assumption <*> (Γ ⍄ f $ h)
 | (SourceReason.Since      h) := pure SourceReason.Since      <*> (Γ ⍄ f $ h)
+| (SourceReason.Lemma      h) := pure SourceReason.Lemma      <*> (Γ ⍄ f $ h)
 | (SourceReason.Forward    a b) := pure SourceReason.Forward <*> (SourceReason.mmap_children $ a) <*> (SourceReason.mmap_children $ b)
 | (SourceReason.And        a b) := pure SourceReason.And <*> (SourceReason.mmap_children $ a) <*> (SourceReason.mmap_children $ b)
 | (SourceReason.ConjElim   a index) := pure SourceReason.ConjElim <*> (SourceReason.mmap_children $ a) <*> pure index
@@ -75,6 +77,17 @@ meta def of_exists : name → expr → tactic source
 | n e := do
   y ← tactic.infer_type e,
   pure {label := n, story := SourceReason.Omit, value := e, type := y, show_value := ff}
+
+meta def of_lemma : expr → tactic source
+| e := do
+  y ← tactic.infer_type e,
+  f ← pure $ expr.get_app_fn e,
+  pure {
+    label := expr.const_name $ expr.get_app_fn e,
+    story := SourceReason.Lemma f,
+    type := y,
+    value := e,
+  }
 
 meta def mmap_children {m} [monad m] (f : telescope → expr → m expr) : telescope → source → m source
 | Γ s := do

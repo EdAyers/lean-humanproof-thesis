@@ -14,9 +14,12 @@ meta structure hp.hp_state :=
 (labs : hp.labeller)
 (writeup : hp.writeupresult)
 (b : hp.box)
-(result : expr) -- the mvar that the box is going to end up being replaced with.
+-- the mvar that the box is going to end up being replaced with.
+(result : expr)
 (trace : list format := [])
-(dont_instantiate : list (expr × name)) -- these are vars that should not be instantiated when creating the writeup.
+-- these are expressions that should be substituted with the given name
+-- when writing up. It is used to prevent "classical.some _" appearing everywhere.
+(dont_instantiate : list (expr × name))
 
 open hp
 

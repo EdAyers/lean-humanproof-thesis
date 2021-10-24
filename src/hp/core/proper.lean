@@ -149,6 +149,15 @@ meta def smallest_absent_composite_subterms (lhs : expr) (rhs : zipper) :=
                     pure $ hlcst && is_term && expr.is_composite s.cursor)
             [] rhs
 
+meta def dummify_replace_core (replacement : expr) : expr → expr → nat → option expr
+| (expr.mvar u _ _) (expr.mvar u2 _ _) _ := if u = u2 then some replacement else none
+| `(classical.some %%x) `(classical.some %%y) _ := do
+    f1 ← some $ get_app_fn x,
+    f2 ← some $ get_app_fn y,
+    if f1 = f2 then some replacement else none
+
+| _ _ _ := none
+
 /-- The pretty printer will automatically instantiate vars which leads to an issue where
 earlier clauses will talk about variables that later get assigned.
 The 'dummifier' solves this by replacing instantiated metavariables with dummy undeclared
@@ -158,8 +167,21 @@ meta def dummify {α} [assignable α] : (expr × name) → α → tactic α
 | ⟨ms, n⟩ x := do
     y ← tactic.infer_type ms,
     l ← mk_local' n binder_info.default y,
-    pure $ assignable.replace x (λ e n,
-      if e = ms then some l else none
+    r ← assignable.mmap_children (λ Γ e, do
+        e' ← pure $ expr.replace e (dummify_replace_core l ms),
+        if e ≠ e' then trace_m "dummify: " $ ((ms, n), (e, e')) else pure (),
+        pure e'
+    ) [] x,
+    pure r
+    -- assignable.mmap_children (λ Γ e, do
+    --     e' ← kabstract ms e transparency.reducible ff,
+    --     deps ← kdepends_on ms e transparency.reducible,
+    --     e'' ← pure $ expr.instantiate_var e' l,
+    --     tactic.trace_m "dummify: " (ms, n, e, e''),
+    --     pure e
+        --  de ← hypothetically (is_success $ tactic.is_def_eq e ms),
+        --  pure if de then l else e
+    --   if e = ms then some l else none
     --   match e with
     --   | (expr.mvar un pn y) :=
     --         ms.mfirst (λ m,
@@ -169,7 +191,7 @@ meta def dummify {α} [assignable α] : (expr × name) → α → tactic α
     --               else none )
     --   | _ := none
     --   end
-)
+-- ) [] x
 
 /-- Attempt to solve the main goal with assumption. Will fail if the main goal is not a prop. -/
 meta def prop_assumption : tactic unit := do

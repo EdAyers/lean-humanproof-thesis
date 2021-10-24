@@ -91,6 +91,9 @@ meta def find_indexes (predicate : binder → Prop) [decidable_pred predicate] :
 meta def reverse_beta : telescope → expr → expr
 | Γ f := Γ.to_lams $ expr.mk_app f $ list.map expr.var $ list.reverse $ list.range Γ.length
 
+meta def count_leading_implicits : telescope → nat
+| Γ := list.length $ list.take_while (λ a, ¬ (binder.is_explicit a)) $ list.reverse $ Γ
+
 end telescope
 
 /-- Given a constant function name `f`, infers the type of `f` and returns `f` as a pi_type telescope. -/

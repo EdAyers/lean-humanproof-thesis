@@ -114,6 +114,7 @@ meta def assignable_of_traversable {t : Type → Type} [traversable t] {α : Typ
 
 meta instance list.assignable {α : Type} [assignable α] : assignable (list α) :=
 {mmap_children := λ t mt f Γ l, @list.mmap t mt _ _ (@assignable.mmap_children _ _ t mt f Γ) l}
+
 meta instance list.zipper.assignable {α : Type} [assignable α] : assignable (list.zipper α) := assignable_of_traversable
 
 meta instance prod.assignable {α β : Type} [assignable α] [assignable β] : assignable (α × β) :=

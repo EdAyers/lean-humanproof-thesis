@@ -281,33 +281,24 @@ meta def apply_and_cases (rec: apply_fn) : apply_fn
     xt ← ⍐ $ infer_type x,
     t ← rec {type := xt, result := x} goal,
     s ← source.of_exists `name_goes_here $ y,
+    s ← relabel_source s,
     pure $ writeup.ApplyTree.AndElim s t
   ),
   run rl rr <|> run rr rl
 
--- universes u
 
 meta def apply_ex_cases (rec: apply_fn) : apply_fn
 | ctx goal := do
-  -- tactic.trace ctx.type,
   `(Exists %%F) ← pure ctx.type,
-  -- tactic.trace "\napply_ex_cases",
-  -- tactic.trace F,
   (expr.lam n bi y b) ← pure F,
-  -- [todo] remove need for classical?
   rv ← to_expr ```(classical.some %%ctx.result),
   rp ← mk_app `classical.some_spec [ctx.result],
   rt ← infer_type rp,
   rt ← tactic.head_beta rt,
-  -- ⍐ $ tactic.trace rt,
-  -- ogs ← get_goals,
-  -- set_goals [goal],
-  -- [(n, [rv,rp])] ← cases r ,
-  -- [goal] ← get_goals,
---   monad_lift (tactic.trace_state),
   t ← rec {result:=rp, type := rt} goal,
   s ← source.of_exists n rv,
-  push_dont_instantiate [(rv,n)],
+  s ← relabel_source s,
+  push_dont_instantiate [(rv,s.label)],
   -- [todo] fix labelling of item if there is a clash
   pure $ writeup.ApplyTree.ExistsElim s t
 
@@ -316,7 +307,6 @@ meta def apply_assumption (x : expr) : tactic unit :=
     ip ← is_proof x,
     if ip then do
       a@(expr.local_const un pn bi y) ← infer_type x >>= find_assumption,
-      -- tactic.trace_state,
       tactic.trace $ ("found assumption", un, pn),
       exact a
     else failure
@@ -326,8 +316,9 @@ meta def apply_pi (rec: apply_fn): apply_fn
 | ctx goal := do
   r ← pure $ ctx.result,
   rt ← pure ctx.type,
+  rt ← tactic.whnf rt,
   (expr.pi n bi y b) ← pure rt,
-  -- ⍐ $ tactic.trace "\napply_pi",
+  -- ⍐ $ tactic.trace_m "apply_pi: " $ (n, y),
   -- ⍐ $ tactic.trace_state,
 
   lc ← get_lctx goal,
@@ -388,29 +379,21 @@ but also projects when it encounters existential quantifiers and conjunctions. -
 meta def apply (h: source) (g : expr) : ZR apply_result := do
   ip ← ⍐ $ is_proof g,
   guard ip,
-  -- ogs ← ⍐ $ tactic.get_goals,
-  -- ⍐ $ tactic.trace_state,
-  -- ⍐ $ tactic.trace "\nbegin apply",
-  -- ZR.trace_state,
-  -- ⍐ $ tactic.trace_state,
   t ← ⍐ $ apply_rec {result := h.to_expr, type := source.type h} g,
   ⍐ $ clear_label g.mvar_pretty_name,
   new_targets ← ⍐ $ writeup.ApplyTree.targets t,
-  -- ⍐ $ tactic.set_goals ogs,
   new_targets ← ⍐ $ new_targets.mmap (λ g, trace_fail $ relabel_mvar g $ some $ expr.mvar_pretty_name g),
-  targ_types ←    ⍐ $ new_targets.mmap tactic.infer_type,
-  -- ⍐ $ tactic.trace ("waterfall.apply", targ_types),
+  targ_types  ← ⍐ $ new_targets.mmap tactic.infer_type,
   new_targets ← ⍐ $ new_targets.mmap tactic.instantiate_mvars,
   new_targets : list stub ← ⍐ $ list.mmap stub.of_expr $ list.reverse $ new_targets,
   t ← ⍐ $ assignable.instantiate_mvars t,
-  new_sources ← ⍐ $ list.mmap relabel_source $ writeup.ApplyTree.sources t,
+  new_sources ← pure $ writeup.ApplyTree.sources t,
   new_sources ← ⍐ $ assignable.instantiate_mvars new_sources,
   ⍐ $ box.Z.register_targets new_targets,
   ⍐ $ box.Z.push_sources_high new_sources,
   ⟨p, _⟩ ← get,
   s ← ⍐ $ stub.of_expr g,
   ⍐ $ with_goals (list.map stub.to_expr new_targets) $ ZR.push_input p $ [writeup.act.Apply s h t],
-  -- ⍐ $ tactic.trace "end apply\n",
   pure ⟨new_targets, new_sources⟩
 
 meta def cases_or : ZR unit := do
@@ -440,93 +423,6 @@ meta def cases_and : ZR unit := do
   s2 ← pure $ {source. label := s.label ++ `r, value := e2, type := B},
   ⍐ $ box.Z.set_cursor $ box.V s1 $ box.V s2 $ b,
   pure ()
-
-/- This is _way_ too complicated. -/
--- meta def induction : ZR unit := do
---   s ← ⍐ $ box.Z.down_V,
---   b ← ⍐ $ box.Z.cursor,
---   e ← ⍐ $ tactic.get_env,
---   (expr.const n _) ← pure $ expr.get_app_fn $ s.type,
---   guard (environment.is_inductive e n),
---   some rec_name ← pure $ e.recursor_of n,
---   ctors ← pure $ environment.constructors_of e n,
---   box_result_type ← ⍐ $ tactic.unsafe.type_context.run $ box.infer b,
---   x ← ⍐ $ (do
---     ogs ← tactic.get_goals,
---     v ← mk_meta_var box_result_type,
---     set_goals [v],
---     -- tactic.applyc rec_name,
---     cs ← tactic.induction s.value,
---     gs ← get_goals,
---     guard (gs.length = cs.length),
---     v ← instantiate_mvars v,
---     gcs ← pure $ list.zip gs cs,
---     (f, ls) ← gcs.mfoldr (λ ⟨g, n, hs, _⟩ (v : expr × list telescope), do
---       expr.app f a ← pure v.1,
---       (bs, a) ← telescope.of_n_lams a hs.length,
---       pure (f, bs :: v.2)
---     ) (v,[]),
---     rbox ← pure $ box.R $ expr.mk_app f $ list.map expr.var $ list.tail $ list.scanr (λ _, nat.succ) 0 gcs,
---     lgcs ← pure $ list.zip ls gcs,
---     side_boxes ← lgcs.mmap (λ ⟨Γ, g, n, hs, _⟩, do
---       b ← assignable.kabstract b s.value,
-
---     ),
-
---     final_box ← lgcs.mfoldr (λ ⟨Γ,g,n,hs,_⟩ b2, do
---     ) rbox,
---     tactic.set_goals ogs,
---     pure v
---     ),
---   pure ()
-
-
-  -- ① find the induction principle for s;
-  -- this should have the form `rec C ..(Π ..xs ..hs, C $ T ..xs) x`
-  /- There will be loads of really tricky cases where we can't easily
-  infer the motive since it is applied to many targets
-  simultaneously. But we will ignore this issue for now. -/
-  -- ② take the child box, duplicate it for each constructor
-  -- ③ add these boxes to each case, add the additional constructors.
-
-  /- Idea; is there a clever way to do this using the built in induction system? I can't see it. -/
-
--- meta def wfcmd_of_ZR : ZR string → ZR waterfall_command := do
-
-
--- meta def wfcmd_of_hp (r : box.zipper → hp string) : hp waterfall_command := do
---   t ← hp.cursor_as_mvar,
---   hp.hypothetically $ (do
---       label ← r,
---       clean_all,
---       rs ← get,
---       pure {display_name := label, command_string := label, run := put rs *> pure ()}
---   )
-
--- meta def wfcmd_of_tactic (r : tactic string) : hp waterfall_command :=
---   wfcmd_of_hp (do
---     t ← hp.cursor_as_stub,
---     ogs ← tactic.get_goals,
---     tactic.set_goals [t],
---     y ← infer_type t,
---     depends ← get_term_stubs y,
---     label ← r,
---     setters ← ⍐ $ depends.mfilter stub.is_assigned >>= list.mmap (λ s, prod.mk s <$> tactic.instantiate_mvars s),
---     t' ← instantiate_mvars t,
---     -- [todo] also generate a clause here: eg
---     -- "by %%label, we have / suffices to show "
---     ngs ← tactic.get_goals,
---     nts ← ⍐ $ list.mmap box.target.of_goal ngs, -- [todo] some work needed here to make sure that sources etc are correctly added
---     rs ← ngs.mfoldr (λ t, pure ∘ (writeup.ApplyTree.ApplyGoal (option.iget $ expr.as_name t) binder_info.default t))
---       $ writeup.ApplyTree.Match t' t setters,
---     hp.replace_target nts,
---     push_clauses $ singleton $ writeup.Clause.TargetTactic ⟨t,y⟩ label rs,
---     tactic.set_goals ogs,
---     check_done,
---     pure label
---   )
-
--- meta def refl_cmd := wfcmd_of_tactic (reflexivity *> pure "reflexivity") -- [todo] add 'reflexivity as the reason
 
 meta def applycmds : ZR (list waterfall_command) := (ZR.hypothetically $ do
   g ← ⍐ $ box.Z.down_stub,
@@ -619,8 +515,6 @@ meta def expand_source : ZR string := do
   pure "expand"
 
 open widget
-
--- meta def split_exists_cmd : hp waterfall_command := wfcmd_of_hp $ split_exists
 
 meta def unroll_once : ZR unit :=
   (do

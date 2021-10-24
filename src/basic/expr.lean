@@ -109,6 +109,10 @@ meta def app_nth : expr → nat → expr → expr
 | f 0 a := app f a
 | _ _ _ := undefined_core "non-lambda binders not implemented for app_nth. "
 
+meta def get_app_fn_args_n : nat → expr → expr × (list expr)
+| (n+1) (expr.app f a) := let (f, args) := get_app_fn_args_n n f in (f, args ++ [a])
+| _ f := (f, [])
+
 meta def has_mvar (e l : expr) : bool :=
 ff <| alt_fold (λ _ acc e,
     if acc then none else

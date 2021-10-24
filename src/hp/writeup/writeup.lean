@@ -140,6 +140,7 @@ end Statement
 
 open Sentence
 
+@[derive_prisms]
 meta inductive ReasonReduction
 | LongReason : list Sentence → ReasonReduction
 | ShortReason : Reason → ReasonReduction
@@ -148,16 +149,17 @@ meta inductive ReasonReduction
 
 open Reason ReasonReduction
 
-meta def Reason.reduce : SourceReason → ReasonReduction
-| (SourceReason.Assumption h) := Immediate
-| (SourceReason.Since r) := Immediate
+meta def Reason.reduce : SourceReason → tactic ReasonReduction
+| (SourceReason.Assumption h) := pure Immediate
+| (SourceReason.Lemma h) := pure Immediate
+| (SourceReason.Since r) := do s ← Statement.ofProp r, pure $ ReasonReduction.ShortReason $ Reason.Since s
 | (SourceReason.Forward implication premiss) := undefined_core "not implemented Reason.reduce"
 | (SourceReason.And r1 r2) := undefined_core "not implemented Reason.reduce"
 | (SourceReason.ConjElim conj index) := undefined_core "not implemented Reason.reduce"
-| SourceReason.Omit := Omit
+| SourceReason.Omit := pure Omit
 | (SourceReason.ExpandLocal r src) := undefined_core "not implemented Reason.reduce"
 | (SourceReason.Setting r setters) :=
-      ShortReason $ Reason.BySetting $ setters
+      pure $ ShortReason $ Reason.BySetting $ setters
 
 open list_parser
 
@@ -221,23 +223,68 @@ meta def ApplyTree.collect_goals : ApplyTree → tactic (list expr × ApplyTree)
 | (ApplyTree.ApplyAssigned _ a) := ApplyTree.collect_goals a
 | a := pure ([],a)
 
+meta def ApplyTree.collect_goals_and_assumptions : ApplyTree → tactic (list expr × list expr × ApplyTree)
+| (ApplyTree.ApplyGoal _ _ g a) := do (gs, asms, a) ← ApplyTree.collect_goals_and_assumptions a, pure $ (g::gs, asms, a)
+| (ApplyTree.ApplyAssigned e a) := do
+      -- only keep the proposition assumptions:
+      ip ← is_proof e,
+      if ip then do
+            (gs, asms, a) ← ApplyTree.collect_goals_and_assumptions a,
+            pure (gs, e :: asms, a)
+      else
+            ApplyTree.collect_goals_and_assumptions a
+| a := pure ([],[], a)
+
 meta def ApplyTree.collect_srcs : ApplyTree → tactic (list source × ApplyTree)
 | (ApplyTree.AndElim s a) := do ⟨gs, a⟩ ← ApplyTree.collect_srcs a, pure $ (s::gs, a)
 | (ApplyTree.ExistsElim s a) := do ⟨gs, a⟩ ← ApplyTree.collect_srcs a, pure $ (s::gs, a)
 | (ApplyTree.ApplyAssigned _ a) := ApplyTree.collect_srcs a
 | a := pure ([],a)
 
+meta def ApplyTree.get_results : ApplyTree →  (list expr)
+| (ApplyTree.Match result _ _) := [result]
+| (ApplyTree.ExistsElim s a) := ApplyTree.get_results a
+| (ApplyTree.ApplyAssigned s a) := ApplyTree.get_results a
+| (ApplyTree.ApplyGoal _ _ _ a) := ApplyTree.get_results a
+| (ApplyTree.AndElim s a) := ApplyTree.get_results a
+
+
+
+meta def result_to_reason : expr → tactic Reason
+| e := do
+      f ← pure $ expr.get_app_fn e,
+      args ← pure $ expr.get_app_args e,
+      T ← infer_type f,
+      (prems, conc) ← pure $ telescope.of_pis T,
+      n ← pure $ telescope.count_leading_implicits prems,
+      trace_m "result_to_reason: " $ (prems, n),
+      (f, args) ← pure $ expr.get_app_fn_args_n (prems.length - n) e,
+      y ← infer_type f,
+      smt ← Statement.ofProp y,
+      trace_m "result_to_reason: " $ (f, args, smt),
+      pure $ Reason.Since smt
+
+meta def ApplyTree.get_source_reason : ApplyTree → tactic Reason
+| a := do
+      (list.cons result _) ← pure $ ApplyTree.get_results a,
+      reason ← result_to_reason result,
+      pure reason
+
+
 meta def ApplyTree.mk_root : ApplyTree → tactic Statement
 | a := do
-      (gs, ApplyTree.Match result goal setters) ← ApplyTree.collect_goals a,
+      (gs, asms,  ApplyTree.Match result goal setters) ← ApplyTree.collect_goals_and_assumptions a,
       if gs.empty then do
+            -- in this case, the application was successful and there are no more goals to match.
             gt ← pure $ goal.type,
             s ← Statement.ofProp gt,
             r ← pure $ if setters.empty then Reason.Omit else Reason.BySetting setters,
             pure $ Statement.By (Statement.Have s) r
       else do
+            -- in this case, there are new goals introduced.
             gt ← pure $ goal.type,
             r ← pure $ if setters.empty then Reason.Omit else Reason.BySetting setters,
+            trace_m "mk_root: " $ result,
             s ← Statement.suff gs (Statement.True),
             pure $ Statement.By s r
 
@@ -254,6 +301,7 @@ meta def ApplyTree.mk_results (rec : ApplyTree → tactic Statement) : ApplyTree
       (ss, a) ← ApplyTree.collect_srcs a,
       guard $ ¬ss.empty,
       cond ← Statement.ex (list.map source.value ss) Statement.True,
+
       rest ← rec a,
       pure $ Statement.meet [cond, rest]
 
@@ -265,21 +313,30 @@ meta def src_to_Statement : source → tactic Statement
       y ← infer_type s.value, -- [todo] what if it's not a prop?
       Statement.ofProp y
 
+meta def assert_with_reason : ReasonReduction → Statement → list Sentence
+| (ReasonReduction.ShortReason r) s := [Sentence.ReasonedAssert r s]
+| (ReasonReduction.Omit) s := [Sentence.BareAssert s]
+| (ReasonReduction.Immediate) s := [Sentence.BareAssert s] -- [todo] difference with Omit?
+| (ReasonReduction.LongReason ss) s := ss ++ [Sentence.Therefore $ Sentence.BareAssert s]
+
+
 /--
 - `Π xs Ps, ⋀ Qs, R` ⟿ "It suffices to find (cpc(xs, Ps)), since then we have R"
 - `⋀ Qs, R` ⟿ "We have R"
 - `∃ xs, ⋀ Qs, R` ⟿ "There exists (cpc(xs)) where Qs such that R"
 - `∃ xs, Π ys Ps, R` ⟿ "There exists (cpc xs) such that it suffices to find ys such that R"
-[todo] improve this code to match up with Mohan's version.
 -/
 meta def parse_Apply : list_parser tact tactic (list Sentence) := do
       ⟨targ, src, results⟩ ← ctest as_Apply,
-      smt ← monad_lift $ ApplyTree.toStatement results,
-      -- [todo] anaphor, use hence or therefore if the lemma src or applyAssigns are in context or were talked about recently.
-      -- for now we just always use 'therefore'
+      story ← pure src.story,
+      rr ← ⍐ $ Reason.reduce story,
+      results_reason ← ⍐ $ ApplyTree.get_source_reason results,
+      rr ← pure $ if rr.is_Immediate then ReasonReduction.ShortReason results_reason else rr,
+      smt ← ⍐ $ ApplyTree.toStatement results,
+      sentences ← pure $ assert_with_reason rr smt,
       -- [todo] adding reasons, sometimes a source lemma will not have been mentioned before and will have a 'story' attached to it.
       -- in this case a prior sentence should be added explaining the 'story'.
-      pure $ singleton $ Sentence.Therefore $ Sentence.BareAssert smt
+      pure $ sentences
 
 meta def parse_Done : list_parser tact tactic (list Sentence) := do
       _ ← ctest as_ProofDone,

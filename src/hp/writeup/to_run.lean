@@ -49,6 +49,8 @@ meta def Sentence.to_run_core : Sentence → run
   let article : run := if is_plural ds then "" else "a" in
   "we must choose" ++ article ++ cpcs.to_quantifier_run ff ds ++ "such that" ++ s.to_run
 | (BareAssert s) := (s.to_run)
+| (ReasonedAssert (Reason.Omit) s) := s.to_run
+| (ReasonedAssert r s) := r.to_run ++ ", " ++ s.to_run
 | (WeAreDone) := "we are done"
 | (Suffices s r) := (Reason.to_run r) ++ ", it suffices to show" ++ s.to_run
 -- | (Have s r) := "We have " ++ s.to_run ++ r.to_run

@@ -41,6 +41,12 @@ meta def cpcs := list cpc
 
 /-- An apply tree is a record of how an `apply` operation was performed.
 Note that in HP, apply operations also unpack ∃ and ∧ propositions and automatically try discharging with `assumption`.
+
+- Match the result was matched directly with the goal, with the given metavariables assigned
+- ExistsElim value a: the applyer had the signature `∃ (x : X), P`
+- AndElim value a : applyer had the signature `X ∧ Y` or `Y ∧ X`
+- ApplyAssigned arg a; applyer had signature `Π (x : X), P` and `x` was assigned a value.
+- ApplyGoal g a; applyer had signature `Π (x : X), P` but `x` was not assigned and hence appears as a new metavariable.
 -/
 @[derive_prisms, derive decidable_eq, derive has_to_tactic_format]
 meta inductive ApplyTree : Type
@@ -72,6 +78,8 @@ end ApplyTree
 
 /-- A Statement corresponds to an intra-sentence proposition.
 The proposition may be object-level or meta/context-level.
+
+A Reason is some additional information that is used to justify statements.
 -/
 @[derive_prisms]
 meta mutual inductive Reason, Statement
@@ -140,6 +148,7 @@ meta inductive Sentence -- [todo] merge with Statement?
 | WeNeedToShow : Statement → Sentence
 /-- Just print the statement. -/
 | BareAssert : Statement → Sentence
+| ReasonedAssert: Reason → Statement → Sentence
 | WeAreDone
 | Suffices (s : Statement) (r : Reason)
 | Therefore : Sentence → Sentence

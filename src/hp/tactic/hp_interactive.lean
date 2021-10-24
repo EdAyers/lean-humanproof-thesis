@@ -162,13 +162,15 @@ meta def trace_commands_at (n : name) : hp unit := do
     pure ()
   )
 
-@[derive has_reflect]
+@[derive has_reflect, derive has_to_tactic_format]
 meta inductive source_loc
 | of_name (n : name)
 | of_type_pexpr (t : pexpr)
+| just_pexpr (e : pexpr)
 
 @[reducible]
 meta def target_loc := option name
+
 
 open lean.parser
 
@@ -177,7 +179,8 @@ meta def surround {α} (l r : string) : lean.parser α → lean.parser α
 
 meta def parse_source_loc : lean.parser (source_loc) :=
   (pure source_loc.of_name <*> ident)
-  <|> surround "‹" "›" (pure source_loc.of_type_pexpr <*> lean.parser.pexpr std.prec.max tt)
+  -- <|> surround "‹" "›" (pure source_loc.of_type_pexpr <*> lean.parser.pexpr std.prec.max tt)
+  <|> ((pure source_loc.just_pexpr) <*> interactive.types.texpr)
 
 meta def goto_source_from_loc : source_loc → box.Z unit
 | (source_loc.of_name n) := do
@@ -191,6 +194,11 @@ meta def get_source_from_loc : source_loc → list source → tactic (list sourc
 | (source_loc.of_type_pexpr p) ss := do
   T ← tactic.to_expr p tt ff,
   ss.mfilter (λ s, tactic.can_unify s.type T)
+| (source_loc.just_pexpr p) _ := do
+  x ← tactic.to_expr p tt ff,
+
+  s ← source.of_lemma x,
+  pure [s]
 
 meta def parse_targ_loc : lean.parser target_loc :=
   (optional (tk "at") *> pure some <*> ident) <|> pure none
@@ -199,6 +207,8 @@ meta def try_loc {α} : option name → ZR α → ZR α
 | none z := try_all_targets z
 | (some n) z := try_with_name n z
 
+meta def borb (b : interactive.parse parse_source_loc) (t : interactive.parse parse_targ_loc) : hp unit :=
+  do ⍐ $ tactic.trace b
 
 meta def apply (s : interactive.parse parse_source_loc) (t : interactive.parse parse_targ_loc) : hp unit :=
   ZR.run $ try_loc t (do
