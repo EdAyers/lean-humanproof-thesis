@@ -173,4 +173,13 @@ def msplit {T : Type u → Type u} [monad T] {α β γ : Type u} (p : α → T (
     ) (⟨[],[]⟩),
     pure ⟨xs.reverse,ys.reverse⟩
 
+meta def unintersperse (p : α → bool) : list α → list (list α)
+| [] := []
+| (a :: t) :=
+  match unintersperse t with
+  | [] := if p a then [[],[]] else [[a]]
+  | (l :: rest) := if p a then [] :: l :: rest else (a :: l) :: rest
+  end
+
+
 end list

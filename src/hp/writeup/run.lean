@@ -9,6 +9,7 @@ namespace hp.writeup
 meta inductive run_item
 | Text (s : string) : run_item
 | Math (ts : option tactic_state) (e : expr) : run_item
+| LineBreak
 
 namespace run_item
   meta def eq : run_item → run_item → bool
@@ -26,17 +27,20 @@ namespace run_item
 
   meta def pp : run_item → tactic format
   | (Text s) := tactic.pp s
+  | (LineBreak) := pure format.line
   | (Math none e) := tactic.pp e
   | (Math (some ts) e) := tactic.with_state ts $ tactic.pp e
 
   meta def to_string : run_item → string
   | (Text s) := s
   | (Math _ e) := e.to_string
+  | LineBreak := "\n"
 
   open widget
 
   meta def view : run_item → tactic (list (widget.html empty))
   | (Text x) := pure $ [h "span" [cn "f4"] [@html.of_string empty x]]
+  | (LineBreak) := pure $ [h "br" [] []]
   | (Math tso x) := do
         ts ← tactic.read,
         ts ← pure $ (ts <| tso),
@@ -94,10 +98,6 @@ meta def starts_with_vowel : run → bool
     (list.any (string.to_list "AEIOUaeiou") (λ c, s.starts_with $ list.as_string [c]))
 | _ := ff
 
-meta def item.to_string  : run_item → string
-| (Math _ e) := expr.to_string e
-| (Text s) := s
-
 meta def emit {m : Type → Type} {α : Type} [monad m] [monad_writer α m] (k : run_item → m α) : run → m unit
 | [] := pure ()
 | (Text "" :: rest) := emit rest
@@ -126,16 +126,27 @@ meta def to_string : run → string
 meta instance : has_to_tactic_format run := ⟨pp⟩
 meta instance : has_to_string run := ⟨run.to_string⟩
 
-meta def view : run → tactic (list (html empty))
+meta def get_blocks : run → list run
+| xs := list.unintersperse is_LineBreak xs
+
+meta def view_span : run → tactic (list (html empty))
 | r := prod.snd <$> @writer_t.run (list (html empty)) tactic unit (@emit _ _ writer_t.monad_of_append _
   (λ x, @has_monad_lift.monad_lift _ _ (writer_t.lift_of_empty) _ $ x.view) r)
 
-meta def item.mmap_exprs {m : Type → Type} [monad m] (f : telescope → expr → m expr) : telescope → run_item → m run_item
+meta def view : run → tactic (list (html empty))
+| r := do
+  blocks ← pure $ get_blocks r,
+  spans ← list.mmap view_span blocks,
+  divs ← pure $ list.map (λ cs, h "div" [cn "mv2"] cs) spans,
+  pure divs
+
+meta def run_item.mmap_exprs {m : Type → Type} [monad m] (f : telescope → expr → m expr) : telescope → run_item → m run_item
 | Γ (Text a) := pure $ Text a
+| Γ (LineBreak) := pure $ LineBreak
 | Γ (Math ts a) := pure (Math ts) <*> f [] a
 
 meta def mmap_exprs {m : Type → Type} [monad m] (f : telescope → expr → m expr) : telescope → run → m run
-| Γ r := list.mmap (item.mmap_exprs f Γ) r
+| Γ r := list.mmap (run_item.mmap_exprs f Γ) r
 
 meta instance : assignable run := ⟨@mmap_exprs⟩
 

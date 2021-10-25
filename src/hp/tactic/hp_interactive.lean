@@ -207,9 +207,6 @@ meta def try_loc {α} : option name → ZR α → ZR α
 | none z := try_all_targets z
 | (some n) z := try_with_name n z
 
-meta def borb (b : interactive.parse parse_source_loc) (t : interactive.parse parse_targ_loc) : hp unit :=
-  do ⍐ $ tactic.trace b
-
 meta def apply (s : interactive.parse parse_source_loc) (t : interactive.parse parse_targ_loc) : hp unit :=
   ZR.run $ try_loc t (do
     ZR.set_context,

@@ -58,11 +58,14 @@ meta def Sentence.to_run_core : Sentence → run
 -- | (Since s r res) := "Since" ++ s.to_run ++ "," ++ r.to_run ++ "we have" ++ res.to_run
 | (Let [] where) := (if where.is_True then "" else "assume" ++ where.to_run) -- [todo] assume should distribute over anded statements.
 | (Let decls where) := "let" ++ cpcs.to_be_run decls ++ (if where.is_True then "" else "where" ++ where.to_run)
-| (LineBreak) := "\n"
-| (InCase smt) :=
-  "in the case " ++ smt.to_run ++ ":"
+| (LineBreak) := [run_item.LineBreak]
+| (InCase smt) := "consider the case" ++ smt.to_run
 
 meta def Sentence.to_run : Sentence → run
+| (InCase smt) :=
+  "In the case " ++ smt.to_run ++ ":"
+
+| (LineBreak) := [run_item.LineBreak]
 | s := run.capitalise (Sentence.to_run_core s) ++ "."
 
 open widget

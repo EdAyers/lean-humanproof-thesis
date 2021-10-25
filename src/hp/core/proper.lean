@@ -169,7 +169,7 @@ meta def dummify {α} [assignable α] : (expr × name) → α → tactic α
     l ← mk_local' n binder_info.default y,
     r ← assignable.mmap_children (λ Γ e, do
         e' ← pure $ expr.replace e (dummify_replace_core l ms),
-        if e ≠ e' then trace_m "dummify: " $ ((ms, n), (e, e')) else pure (),
+        -- if e ≠ e' then trace_m "dummify: " $ ((ms, n), (e, e')) else pure (),
         pure e'
     ) [] x,
     pure r

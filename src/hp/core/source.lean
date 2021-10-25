@@ -4,10 +4,10 @@ namespace hp
 /-- Tracking the reason why some proposition is true.
 Input writeup type, shouldn't contain any writeup information and
 should just track the salient parts of the derivation. -/
-@[derive_prisms, derive decidable_eq]
+@[derive_prisms, derive decidable_eq, derive has_to_tactic_format]
 meta inductive SourceReason
 /-- "by assumption `h`" -/
-| Assumption (h : hyp)
+| Assumption (h : (name × expr))
 /-- Since x and y are prime. Use this if the source was expanded to something gnarly. -/
 | Since (r : expr)
 | Lemma (r : expr)
@@ -23,7 +23,7 @@ meta inductive SourceReason
 | Setting (r : SourceReason) (setters : list (stub × expr))
 
 meta def SourceReason.mmap_children {m} [monad m] (f : telescope → expr → m expr) (Γ : telescope) : SourceReason → m SourceReason
-| (SourceReason.Assumption h) := pure SourceReason.Assumption <*> (Γ ⍄ f $ h)
+| (SourceReason.Assumption (n, e)) := pure SourceReason.Assumption <*> (pure prod.mk <*> pure n <*> (Γ ⍄ f $ e))
 | (SourceReason.Since      h) := pure SourceReason.Since      <*> (Γ ⍄ f $ h)
 | (SourceReason.Lemma      h) := pure SourceReason.Lemma      <*> (Γ ⍄ f $ h)
 | (SourceReason.Forward    a b) := pure SourceReason.Forward <*> (SourceReason.mmap_children $ a) <*> (SourceReason.mmap_children $ b)
@@ -58,7 +58,8 @@ meta instance : has_to_tactic_format source := ⟨λ s,
   end⟩
 
 meta def of_hyp : hyp → source
-| h := { story := SourceReason.Assumption h, label := h.pretty_name, value := h.to_expr, type := h.type }
+| h := { story := SourceReason.Assumption (h.pretty_name, h.to_expr), label := h.pretty_name, value := h.to_expr, type := h.type }
+
 
 meta instance : has_coe hyp source := ⟨of_hyp⟩
 

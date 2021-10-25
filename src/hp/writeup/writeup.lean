@@ -140,7 +140,7 @@ end Statement
 
 open Sentence
 
-@[derive_prisms]
+@[derive_prisms, derive has_to_tactic_format]
 meta inductive ReasonReduction
 | LongReason : list Sentence → ReasonReduction
 | ShortReason : Reason → ReasonReduction
@@ -150,7 +150,10 @@ meta inductive ReasonReduction
 open Reason ReasonReduction
 
 meta def Reason.reduce : SourceReason → tactic ReasonReduction
-| (SourceReason.Assumption h) := pure Immediate
+| (SourceReason.Assumption (n, e)) := do
+      y ← infer_type e,
+      s ← Statement.ofProp y,
+      pure $ ReasonReduction.ShortReason $ Reason.Since $ s
 | (SourceReason.Lemma h) := pure Immediate
 | (SourceReason.Since r) := do s ← Statement.ofProp r, pure $ ReasonReduction.ShortReason $ Reason.Since s
 | (SourceReason.Forward implication premiss) := undefined_core "not implemented Reason.reduce"
@@ -257,11 +260,11 @@ meta def result_to_reason : expr → tactic Reason
       T ← infer_type f,
       (prems, conc) ← pure $ telescope.of_pis T,
       n ← pure $ telescope.count_leading_implicits prems,
-      trace_m "result_to_reason: " $ (prems, n),
+      -- trace_m "result_to_reason: " $ (prems, n),
       (f, args) ← pure $ expr.get_app_fn_args_n (prems.length - n + 1) e,
       y ← infer_type f,
       smt ← Statement.ofProp y,
-      trace_m "result_to_reason: " $ (f, args, smt),
+      -- trace_m "result_to_reason: " $ (f, args, smt),
       pure $ Reason.Since smt
 
 meta def ApplyTree.get_source_reason : ApplyTree → tactic Reason
@@ -284,7 +287,7 @@ meta def ApplyTree.mk_root : ApplyTree → tactic Statement
             -- in this case, there are new goals introduced.
             gt ← pure $ goal.type,
             r ← pure $ if setters.empty then Reason.Omit else Reason.BySetting setters,
-            trace_m "mk_root: " $ result,
+            -- trace_m "mk_root: " $ result,
             s ← Statement.suff gs (Statement.True),
             pure $ Statement.By s r
 
@@ -331,6 +334,7 @@ meta def parse_Apply : list_parser tact tactic (list Sentence) := do
       story ← pure src.story,
       rr ← ⍐ $ Reason.reduce story,
       results_reason ← ⍐ $ ApplyTree.get_source_reason results,
+      ⍐ $ trace_m "parse_Apply" $ (story),
       rr ← pure $ if rr.is_Immediate then ReasonReduction.ShortReason results_reason else rr,
       smt ← ⍐ $ ApplyTree.toStatement results,
       sentences ← pure $ assert_with_reason rr smt,
@@ -347,22 +351,31 @@ meta def parse_Tactic : list_parser tact tactic (list Sentence) := do
       smt ← monad_lift $ ApplyTree.toStatement results,
       pure $ singleton $ Sentence.BareAssert $ Statement.By smt (Reason.Tactic label)
 
-meta def test_Scope : list_parser tact tactic (name × tact) := do
+meta def test_Scope : list_parser tact tactic (binder × tact) := do
       (ts, act.Scope n i) ← list_parser.take | failure,
       pure $ (n, (ts, i))
+
+meta def get_case_name_from_binder : binder → tactic Statement
+-- | ⟨`or.inl.CASE, _, y⟩ := do
+--       -- tactic.trace_m "get_case_name_from_binder: " $ y,
+--       (hh, _ )← returnopt $ expr.pi_binder y,
+--       Statement.ofProp hh.type
+| ⟨_, _, y⟩ := do
+      (hh, _ )← returnopt $ expr.pi_binder y,
+      Statement.ofProp hh.type
 
 meta def parse_Scope (rec : list_parser tact tactic (list Sentence)) : list_parser tact tactic (list Sentence) := do
       (n, s0) ← test_Scope,
       ss ← many $ (do
             (m, s) ← test_Scope,
-            guard $ m = n,
+            guard $ m.name = n.name,
             pure s
       ),
       ss ← pure $ list.cons s0 ss,
       except.ok (sentences, []) ← ⍐ $ list_parser.run rec ss | failure,
-      pre ← pure $ Sentence.InCase (Statement.ofRun "case goes here"),
-      post ← pure $ Sentence.LineBreak,
-      pure $ [ pre ] ++ sentences ++ [ post ]
+      case_smt ← ⍐ $ get_case_name_from_binder n,
+      pre ← pure $ Sentence.InCase case_smt,
+      pure $ [ Sentence.LineBreak,  pre ] ++ sentences ++ [ Sentence.LineBreak ]
 
 meta def parse_Cases : list_parser tact tactic (list Sentence) := do
       ss ← ctest as_Cases,

@@ -48,20 +48,8 @@ begin [hp]
   cases H₁,
 
   apply (@x_sub_x_union_y) at T₀,
-  trace_writeup,
-  expand H,
-  apply H at T₀,
-  trace_writeup,
-  apply H₂ at T₁,
-  apply H₃ at T,
-
-  trace_writeup,
-
-  expand H₀,
-  cosplit,
-  apply H₀ at T₀,
-  apply H₂ at T,
-  apply H₄ at T,
+  apply H at T₁,
+  -- apply H₂ at T₃, -- [fixme]
 
 end
 

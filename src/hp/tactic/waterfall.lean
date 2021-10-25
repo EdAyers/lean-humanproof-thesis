@@ -79,9 +79,9 @@ namespace ZR
       rs ← ( get : hp hp_state ),
       xs ← pure
         $ list.olast
-        $ list.filter_map (λ x,
-          match x with
-          | (name.mk_string "CASE" n) := some x
+        $ list.filter_map (λ b,
+          match binder.name b with
+          | (name.mk_string "CASE" n) := some b
           | _ := none
           end)
         $ box.path.A1_list p,
@@ -127,9 +127,11 @@ namespace ZR
     b1 ← pure
       $ bs.foldl (λ b x,
         box.I x
+        -- let h : hyp := { uniq_name := name.anonymous, pretty_name := x.name,  }
         $ box.V { label := x.name
                 , value := expr.var 0
-                , type  := expr.lift_vars x.type 0 1 }
+                , type  := expr.lift_vars x.type 0 1,
+                story := SourceReason.Assumption (x.name, expr.var 0) }
         $ b)
       $ box.T ⟨s.name, s.info, b⟩
       $ box.R (expr.var 0),
@@ -307,7 +309,7 @@ meta def apply_assumption (x : expr) : tactic unit :=
     ip ← is_proof x,
     if ip then do
       a@(expr.local_const un pn bi y) ← infer_type x >>= find_assumption,
-      tactic.trace $ ("found assumption", un, pn),
+      -- tactic.trace $ ("found assumption", un, pn),
       exact a
     else failure
   )
@@ -331,7 +333,7 @@ meta def apply_pi (rec: apply_fn): apply_fn
   -- ⍐ $ tactic.trace "rec",
   -- ⍐ $ tactic.trace rt,
   t ← rec {result := r, type := rt} goal,
-  with_goals [x] $ (try $ apply_instance), -- [todo] used to be apply_assumption here but it's unsafe.
+  with_goals [x] $ (try $ apply_assumption x <|> apply_instance), -- [todo] used to be apply_assumption here but it's unsafe.
   ia ← is_assigned x,
   if ia then do
     xx ← ⍐ $ tactic.instantiate_mvars x,
@@ -447,7 +449,7 @@ meta def split_target : stub → ZR apply_result | g := do
   s ← ⍐ $ source.of_expr `split c,
   res ← ZR.no_clauses $ apply s g,
   new_target_types ← ⍐ $ list.mmap stub.to_type $ res.new_targets,
-  ⍐ $ trace_m "split_target: " $  new_target_types,
+  -- ⍐ $ trace_m "split_target: " $  new_target_types,
   ZR.commit,
   -- ZR.trace_state,
   pure res
@@ -458,7 +460,7 @@ meta def split_conj_cmd : ZR string := do
   yy ← ⍐ $ tactic.instantiate_mvars y,
   `(%%A ∧ %%B) ← pure y,
   r ← split_target g,
-  ⍐ $ trace_m "split_conj_cmd " $ r.new_targets,
+  -- ⍐ $ trace_m "split_conj_cmd " $ r.new_targets,
 
   [p, v] ← pure r.new_targets,
   ⟨path, _⟩ ← get,
@@ -469,7 +471,7 @@ meta def split_exists : ZR string := do
   g ← ⍐ $ box.Z.down_stub,
   y ← ⍐ $ infer_type g,
   `(Exists %%A) ← ⍐ $ infer_type g,
-  ⍐ $ trace_m "split_exists" $ y,
+  -- ⍐ $ trace_m "split_exists" $ y,
   r ← split_target g,
   [p, v] ← pure r.new_targets,
   ⟨path, _⟩ ← get,

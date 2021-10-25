@@ -378,10 +378,10 @@ namespace path
   | p := foldup (λ p l, l <| (λ i, list.cons (prod.fst i) l) <$> as_V p) p []
 
   /-- Go up through the path and get all of the labels of the A1s -/
-  meta def A1_list : path → list name
+  meta def A1_list : path → list binder
   | p := foldup (λ p l,
     match p with
-    | (path.A1 ⟨n,_,_⟩ _ _) := list.cons n l
+    | (path.A1 b _ _) := list.cons b l
     | _ := l
     end
   ) p []

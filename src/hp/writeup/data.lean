@@ -133,7 +133,16 @@ with Statement.pp : Statement → tactic format
 | (TermStatement t) := nest_join "TermStatement" [pp t]
 | (CPC c) := nest_join "CPC" [pp c]
 | (Either ss) := nest_join "Either" $ list.map Statement.pp ss
-| _ := pure $ to_fmt "not implemented"
+| (And ss) := nest_join "And" $ list.map Statement.pp ss
+| (Provided a b) := nest_join "Provided" $ list.map Statement.pp [a, b]
+| (Exists cpc b) := nest_join "Exists" $ [pp cpc, Statement.pp b]
+| (Forall cpc b) := nest_join "Forall" $ [pp cpc, Statement.pp b]
+| (Implies a b) := nest_join "Implies" $ list.map Statement.pp [a, b]
+| (Whenever a b) := nest_join "Whenever" $ list.map Statement.pp [a, b]
+| (By s r) := nest_join "By" $ [Statement.pp s, Reason.pp r]
+| (ForSome s bs where) := nest_join "ForSome" $ [Statement.pp s, pp bs, Statement.pp where]
+| (Suffices bs where) := nest_join "Suffices" $ [pp bs, Statement.pp where]
+| (Have s) := nest_join "Have" $ [Statement.pp s]
 
 meta instance Statement.has_pp : has_to_tactic_format Statement := ⟨Statement.pp⟩
 meta instance Reason.has_pp : has_to_tactic_format Reason := ⟨Reason.pp⟩
@@ -172,7 +181,7 @@ meta inductive act
 | ExpandTarget
 | TargetTactic (target : stub) (tactic_label : string) (results : ApplyTree)
 /-- You can add a scope to an act to indicate that the microplanner should place it in its own paragraph.-/
-| Scope : name → act → act
+| Scope : binder → act → act
 | Cases : list binder → act
 
 open tactic
