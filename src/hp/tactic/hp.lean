@@ -128,6 +128,8 @@ section
   meta def relabel_source : source → hp source
   | s := labeller.relabel_source s
 
+  meta def trace_labeller : hp unit := labeller.trace_label_state
+
 end
 
 open box

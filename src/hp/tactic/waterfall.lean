@@ -32,22 +32,27 @@ section
   meta instance ZR.mlZ: has_monad_lift box.Z ZR := ⟨@Z_lift_ZR⟩
 
   protected meta def ZR.run {α} : ZR α → hp α | zr := do
-    -- tactic.trace "ZR.run",
     -- tactic.trace_state,
+    ⍐ $ trace_m "ZR.run: " $ "start",
+    trace_labeller,
     ogs ← get_goals,
     b ← hp_state.b <$> get,
     z ← type_context.run $ box.zipper.zip b,
     set_goals [z.1.get_dummy_goal],
+    gs ← get_goals,
+    -- ⍐ $ trace_m "ZR.run: " $ gs,
+
     (a,z) ← state_t.run zr z,
     set_goals [z.1.get_dummy_goal],
-    -- tactic.trace "\nbefore unzip",
     -- tactic.trace z,
     b ← type_context.run $ (box.zipper.unzip z),
-    -- tactic.trace "\nafter unzip",
     -- tactic.trace b,
     set_goals ogs,
     -- tactic.trace b,
     modify $ hp_state.with_b b,
+    trace_labeller,
+    ⍐ $ trace_m "ZR.run: " $ "end",
+
     pure a
 
   meta instance ZR.mrun : monad_run hp ZR := ⟨@ZR.run⟩
@@ -126,12 +131,12 @@ namespace ZR
     -- (⍐ $ tactic.trace bs),
     b1 ← pure
       $ bs.foldl (λ b x,
-        box.I x
-        -- let h : hyp := { uniq_name := name.anonymous, pretty_name := x.name,  }
-        $ box.V { label := x.name
-                , value := expr.var 0
-                , type  := expr.lift_vars x.type 0 1,
-                story := SourceReason.Assumption (x.name, expr.var 0) }
+        box.I x $
+        let value : expr := expr.var 0 in let type := expr.lift_vars x.type 0 1 in
+         box.V { label := x.name
+                , value := value
+                , type  := type,
+                story := SourceReason.Assumption x.name value type}
         $ b)
       $ box.T ⟨s.name, s.info, b⟩
       $ box.R (expr.var 0),
@@ -236,6 +241,7 @@ meta def ZR_to_cmd : ZR string → ZR waterfall_command
 meta structure apply_context :=
 (type : expr)
 (result: expr)
+(params : list expr)
 
 open tactic.unsafe.type_context
 
@@ -260,11 +266,14 @@ meta def apply_match : apply_fn
   b ← tactic.infer_type ac.result,
   goal : stub ← pure $ stub.mk goal goal_type, -- [hack] sometimes goal is not a stub, should just be an expr, type bundle.
   -- tactic.trace $ (b, goal_type),
-  setters ← get_term_stubs goal_type,
+  goal_setters ← get_term_stubs goal_type,
+  source_setters ← get_term_stubs b,
+  setters ← pure $ list.union goal_setters source_setters,
+  param_stubs ← ⍐ $ list.mmap stub.of_expr ac.params,
+  setters ← pure $ list.diff setters param_stubs,
   unify goal_type b (transparency.semireducible) tt,
   setters ← monad_lift $ setters.mfilter stub.is_assigned,
   setters ← monad_lift $ list.mmap (λ s : stub, prod.mk s <$> tactic.instantiate_mvars s) setters,
-  -- tactic.trace "apply match found: ",
   -- tactic.trace (b, goal_type),
   r ← instantiate_mvars ac.result,
   with_goals [goal] $ exact r,
@@ -281,7 +290,7 @@ meta def apply_and_cases (rec: apply_fn) : apply_fn
   rr ← mk_app `and.right [ctx.result],
   let run := λ (x y : expr), (do
     xt ← ⍐ $ infer_type x,
-    t ← rec {type := xt, result := x} goal,
+    t ← rec { type := xt, result := x, ..ctx,} goal,
     s ← source.of_exists `name_goes_here $ y,
     s ← relabel_source s,
     pure $ writeup.ApplyTree.AndElim s t
@@ -297,7 +306,7 @@ meta def apply_ex_cases (rec: apply_fn) : apply_fn
   rp ← mk_app `classical.some_spec [ctx.result],
   rt ← infer_type rp,
   rt ← tactic.head_beta rt,
-  t ← rec {result:=rp, type := rt} goal,
+  t ← rec {result:=rp, type := rt, ..ctx,} goal,
   s ← source.of_exists n rv,
   s ← relabel_source s,
   push_dont_instantiate [(rv,s.label)],
@@ -332,7 +341,7 @@ meta def apply_pi (rec: apply_fn): apply_fn
   b ← pure $ expr.instantiate_var b x,
   -- ⍐ $ tactic.trace "rec",
   -- ⍐ $ tactic.trace rt,
-  t ← rec {result := r, type := rt} goal,
+  t ← rec {result := r, type := rt, params := x :: ctx.params} goal,
   with_goals [x] $ (try $ apply_assumption x <|> apply_instance), -- [todo] used to be apply_assumption here but it's unsafe.
   ia ← is_assigned x,
   if ia then do
@@ -381,7 +390,7 @@ but also projects when it encounters existential quantifiers and conjunctions. -
 meta def apply (h: source) (g : expr) : ZR apply_result := do
   ip ← ⍐ $ is_proof g,
   guard ip,
-  t ← ⍐ $ apply_rec {result := h.to_expr, type := source.type h} g,
+  t ← ⍐ $ apply_rec {result := h.to_expr, type := source.type h, params := []} g,
   ⍐ $ clear_label g.mvar_pretty_name,
   new_targets ← ⍐ $ writeup.ApplyTree.targets t,
   new_targets ← ⍐ $ new_targets.mmap (λ g, trace_fail $ relabel_mvar g $ some $ expr.mvar_pretty_name g),
@@ -395,7 +404,16 @@ meta def apply (h: source) (g : expr) : ZR apply_result := do
   ⍐ $ box.Z.push_sources_high new_sources,
   ⟨p, _⟩ ← get,
   s ← ⍐ $ stub.of_expr g,
-  ⍐ $ with_goals (list.map stub.to_expr new_targets) $ ZR.push_input p $ [writeup.act.Apply s h t],
+  new_goals ← pure $ list.map stub.to_expr new_targets,
+  ⍐ $ with_goals new_goals $ (do
+
+    -- hv ← pure $ source.value h,
+    -- hT ← infer_type hv,
+    -- ⍐ $ trace_m "apply: " $ hT,
+    -- ⍐ $ tactic.trace_state,
+
+   ZR.push_input p $ [writeup.act.Apply s h t]),
+
   pure ⟨new_targets, new_sources⟩
 
 meta def cases_or : ZR unit := do

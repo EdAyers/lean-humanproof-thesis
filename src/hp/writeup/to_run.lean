@@ -41,6 +41,7 @@ with Statement.to_run : Statement → run
 | (Statement.Provided x y) := "provided" ++ x.to_run ++ "," ++ y.to_run
 | (Statement.Have s) := "we have" ++ s.to_run
 | (Statement.Either ss) := (run.append "either ") $ orify $ list.map Statement.to_run $ ss
+| (Statement.WeAreDone) := "we are done"
 open Sentence Statement
 
 meta def Sentence.to_run_core : Sentence → run

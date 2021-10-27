@@ -44,12 +44,19 @@ end
 example {A B : set X} : is_open A → is_open B → is_open (A ∪ B) :=
 begin [hp]
   unroll,
-  unroll at T₀,
+  unroll at T₁,
   cases H₁,
 
-  apply (@x_sub_x_union_y) at T₀,
-  apply H at T₁,
-  -- apply H₂ at T₃, -- [fixme]
+  apply (@x_sub_x_union_y) at T₁,
+  apply H at T₂,
+  apply H₂ at T₃,
+  apply H₃,
+
+  apply (@y_sub_x_union_y) at T₁,
+
+  apply H₀ at T₄,
+  apply H₂ at T₅,
+  apply H₄,
 
 end
 

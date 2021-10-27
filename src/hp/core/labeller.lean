@@ -123,12 +123,18 @@ meta def is_in_play : name → m bool | n:= do
 meta def push_label : name → m unit | n := do
   modify $ labeller.modify_in_play $ insert n
 
+meta def trace_label_state : m unit := do
+  labs ← get,
+  trace (to_string $ labs.in_play) (pure ()),
+  pure ()
+
 meta def select_label : list string → m name
 | [] := ⍐ $ tactic.fail "need to select from at least one label"
 | ss := do
   labs ← get,
+
   unused ← pure $ ss.find ((∉ labs) ∘ mk_simple_name),
-  -- ⍐ $ tactic.trace unused,
+  ⍐ $ tactic.trace ("select_label: ", (ss, labs.in_play)),
   match unused with
   | (some h) := do
     n ← pure $ mk_simple_name h,
@@ -138,7 +144,7 @@ meta def select_label : list string → m name
     ss ← pure $ ss.map (λ x, (x, labs.counts.get x)),
     some (base, i) ← pure $ ss.min_by (int.of_nat ∘ prod.snd),
     n ← pure $ mk_simple_name $ base ++ to_subscript i,
-    -- ⍐ $ tactic.trace (base, i),
+    ⍐ $ tactic.trace (base, i),
     modify $ labeller.modify_counts $ λ cs, cs.modify (+ 1) base,
     push_label n,
 
@@ -266,7 +272,7 @@ meta def label_telescope : telescope → m telescope :=
 
 meta def free_label  (n : name) : m unit := do
   ls ← get,
-  put $ ls.modify_in_play (dict.erase n),
+  -- put $ ls.modify_in_play (dict.erase n),
   pure ()
 
 meta def relabel_source : source → m source

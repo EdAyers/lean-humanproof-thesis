@@ -131,6 +131,7 @@ meta def try_targets_with_name {α} : name → ZR α → ZR α | n z := do
   )
 
 meta def try_with_name {α} : name → ZR α → ZR α | n z := do
+  -- ⍐ $ trace_m "try_with_name: " $ n,
   ⟨_, b⟩ ← get,
   adrs ← pure $ box.find_with_name n b,
   adrs.mfirst (λ a, do

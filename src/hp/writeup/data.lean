@@ -115,6 +115,7 @@ The 'where' are just other facts that might be relevant. -/
 | Have (s : Statement)
 | Provided (s1 s2 : Statement) : Statement
 | Either (ss : list Statement) : Statement
+| WeAreDone : Statement
 
 section pp
 
@@ -143,11 +144,17 @@ with Statement.pp : Statement → tactic format
 | (ForSome s bs where) := nest_join "ForSome" $ [Statement.pp s, pp bs, Statement.pp where]
 | (Suffices bs where) := nest_join "Suffices" $ [pp bs, Statement.pp where]
 | (Have s) := nest_join "Have" $ [Statement.pp s]
+| (WeAreDone) := nest_join "WeAreDone" $ []
 
 meta instance Statement.has_pp : has_to_tactic_format Statement := ⟨Statement.pp⟩
 meta instance Reason.has_pp : has_to_tactic_format Reason := ⟨Reason.pp⟩
 
 end pp
+
+meta def Reason.is_Omit : Reason → bool
+| (Reason.Omit) := tt
+| _ := ff
+
 
 @[derive_prisms, derive has_to_tactic_format]
 meta inductive Sentence -- [todo] merge with Statement?

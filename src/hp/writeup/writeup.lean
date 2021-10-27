@@ -150,9 +150,10 @@ meta inductive ReasonReduction
 open Reason ReasonReduction
 
 meta def Reason.reduce : SourceReason → tactic ReasonReduction
-| (SourceReason.Assumption (n, e)) := do
-      y ← infer_type e,
+| (SourceReason.Assumption n e y) := do
+      -- trace_m "Reason.reduce: " $ y,
       s ← Statement.ofProp y,
+      -- trace_m "Reason.reduce: " $ y,
       pure $ ReasonReduction.ShortReason $ Reason.Since $ s
 | (SourceReason.Lemma h) := pure Immediate
 | (SourceReason.Since r) := do s ← Statement.ofProp r, pure $ ReasonReduction.ShortReason $ Reason.Since s
@@ -260,17 +261,17 @@ meta def result_to_reason : expr → tactic Reason
       T ← infer_type f,
       (prems, conc) ← pure $ telescope.of_pis T,
       n ← pure $ telescope.count_leading_implicits prems,
-      -- trace_m "result_to_reason: " $ (prems, n),
       (f, args) ← pure $ expr.get_app_fn_args_n (prems.length - n + 1) e,
-      y ← infer_type f,
-      smt ← Statement.ofProp y,
+      T ← infer_type f,
+      smt ← Statement.ofProp T,
       -- trace_m "result_to_reason: " $ (f, args, smt),
       pure $ Reason.Since smt
 
 meta def ApplyTree.get_source_reason : ApplyTree → tactic Reason
 | a := do
       (list.cons result _) ← pure $ ApplyTree.get_results a,
-      reason ← result_to_reason result,
+      reason ← (result_to_reason result) <|> (pure Reason.Omit),
+      -- trace_m "ApplyTree.get_source_reason" $ reason,
       pure reason
 
 
@@ -282,7 +283,11 @@ meta def ApplyTree.mk_root : ApplyTree → tactic Statement
             gt ← pure $ goal.type,
             s ← Statement.ofProp gt,
             r ← pure $ if setters.empty then Reason.Omit else Reason.BySetting setters,
-            pure $ Statement.By (Statement.Have s) r
+            -- trace_m "ApplyTree.mk_root" $ setters,
+            if asms.empty then
+                  pure $ Statement.By (Statement.WeAreDone) r
+            else
+                  pure $ Statement.By (Statement.Have s) r
       else do
             -- in this case, there are new goals introduced.
             gt ← pure $ goal.type,
@@ -313,8 +318,9 @@ meta def ApplyTree.toStatement : ApplyTree → tactic Statement
 
 meta def src_to_Statement : source → tactic Statement
 | s := do
-      y ← infer_type s.value, -- [todo] what if it's not a prop?
-      Statement.ofProp y
+      f ← pure s.value,
+      T ← infer_type f,
+      Statement.ofProp T
 
 meta def assert_with_reason : ReasonReduction → Statement → list Sentence
 | (ReasonReduction.ShortReason r) s := [Sentence.ReasonedAssert r s]
@@ -322,6 +328,9 @@ meta def assert_with_reason : ReasonReduction → Statement → list Sentence
 | (ReasonReduction.Immediate) s := [Sentence.BareAssert s] -- [todo] difference with Omit?
 | (ReasonReduction.LongReason ss) s := ss ++ [Sentence.Therefore $ Sentence.BareAssert s]
 
+meta def ApplyTree.is_trivial : ApplyTree → bool
+| (ApplyTree.Match _ _ []) := tt
+| _ := ff
 
 /--
 - `Π xs Ps, ⋀ Qs, R` ⟿ "It suffices to find (cpc(xs, Ps)), since then we have R"
@@ -334,10 +343,16 @@ meta def parse_Apply : list_parser tact tactic (list Sentence) := do
       story ← pure src.story,
       rr ← ⍐ $ Reason.reduce story,
       results_reason ← ⍐ $ ApplyTree.get_source_reason results,
-      ⍐ $ trace_m "parse_Apply" $ (story),
+      -- ⍐ $ trace_m "parse_Apply: " $ (rr, results_reason),
+      is_triv : bool ← pure $ band (ApplyTree.is_trivial results) $ band (rr.is_Omit) (Reason.is_Omit results_reason),
+      if is_triv then pure [] else do
+      -- if  then
+      -- ⍐ $ trace_m "parse_Apply: " $ (rr),
       rr ← pure $ if rr.is_Immediate then ReasonReduction.ShortReason results_reason else rr,
+      -- ⍐ $ trace_m "parse_Apply: " $ (rr),
       smt ← ⍐ $ ApplyTree.toStatement results,
       sentences ← pure $ assert_with_reason rr smt,
+      -- ⍐ $ trace_m "parse_Apply: " $ (smt),
       -- [todo] adding reasons, sometimes a source lemma will not have been mentioned before and will have a 'story' attached to it.
       -- in this case a prior sentence should be added explaining the 'story'.
       pure $ sentences
@@ -402,6 +417,7 @@ meta def inputs_to_sentences : list tact → tactic (list Sentence)
 | cs := do
    xs ← list_parser.run (parse_inputs) cs,
    (xs, ys) ← tactic.return_except xs,
+--    trace_m "inputs_to_sentences: " $ xs,
    pure xs
 
 end writeup
