@@ -33,8 +33,8 @@ section
 
   protected meta def ZR.run {α} : ZR α → hp α | zr := do
     -- tactic.trace_state,
-    ⍐ $ trace_m "ZR.run: " $ "start",
-    trace_labeller,
+    -- ⍐ $ trace_m "ZR.run: " $ "start",
+    -- trace_labeller,
     ogs ← get_goals,
     b ← hp_state.b <$> get,
     z ← type_context.run $ box.zipper.zip b,
@@ -50,8 +50,8 @@ section
     set_goals ogs,
     -- tactic.trace b,
     modify $ hp_state.with_b b,
-    trace_labeller,
-    ⍐ $ trace_m "ZR.run: " $ "end",
+    -- trace_labeller,
+    -- ⍐ $ trace_m "ZR.run: " $ "end",
 
     pure a
 

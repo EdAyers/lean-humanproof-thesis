@@ -134,7 +134,6 @@ meta def select_label : list string → m name
   labs ← get,
 
   unused ← pure $ ss.find ((∉ labs) ∘ mk_simple_name),
-  ⍐ $ tactic.trace ("select_label: ", (ss, labs.in_play)),
   match unused with
   | (some h) := do
     n ← pure $ mk_simple_name h,
@@ -144,10 +143,8 @@ meta def select_label : list string → m name
     ss ← pure $ ss.map (λ x, (x, labs.counts.get x)),
     some (base, i) ← pure $ ss.min_by (int.of_nat ∘ prod.snd),
     n ← pure $ mk_simple_name $ base ++ to_subscript i,
-    ⍐ $ tactic.trace (base, i),
     modify $ labeller.modify_counts $ λ cs, cs.modify (+ 1) base,
     push_label n,
-
     pure n
   end
 
